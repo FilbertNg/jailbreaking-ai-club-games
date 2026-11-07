@@ -319,7 +319,7 @@ dialog h2 { margin: 0 0 4px; font-size: 1.3rem; }
 .verdict.none { color: var(--ink-soft); border-color: var(--ink-soft); transform: none; }
 
 @media (max-width: 640px) {
-  .entry { grid-template-columns: 1fr auto; }
-  .entry > div:first-child { grid-column: 1 / -1; }
+  .entry { grid-template-columns: 1fr; gap: 10px; }
   .how { grid-column: 1 / -1; }
+  .verdict { justify-self: start; white-space: normal; }
 }
