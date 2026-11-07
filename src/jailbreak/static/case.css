@@ -248,6 +248,9 @@ dialog h2 { margin: 0 0 4px; font-size: 1.3rem; }
 .host-section h3 { margin: 0; font-size: 1rem; }
 .host-section p { margin: 0; }
 .host-form { display: grid; gap: 8px; }
+.host-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.host-row button { flex: 1 1 auto; }
+.host-clock { font: 700 1.3rem var(--font-record); font-variant-numeric: tabular-nums; }
 .host-form label { font-weight: 600; font-size: 0.9rem; }
 .host-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; }
 

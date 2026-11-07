@@ -39,7 +39,7 @@ Run `uv run jailbreak` on Laptop B and open its own `/team/b`; Laptop A (once it
 
 ## Changing the game
 
-Everything lives in `config.json`: models, timer lengths, hints, and the guard prompt for each round (`{code}` marks where the secret goes). Restart the server after editing it.
+Everything lives in `config.json`. Each round has a `title`, a `difficulty` label, a base time in `minutes`, its own `hint`, and the guard `prompt` (`{code}` marks where the secret goes). `"easier_option": 2` on Round 3 is what offers the Round 2 guard as a Medium choice. Restart the server after editing it. The host can still change every round's time from the Host panel during the event.
 
 The guard tries `gemini-3.5-flash-lite` first, then `gemini-3.1-flash-lite`, then `gemma-4-26b-a4b-it`. A model that hits a rate limit or an error is skipped for 60 seconds. If Gemma keeps failing, swap it for `gemma-4-31b-it` in `config.json`.
 

@@ -17,12 +17,16 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class RoundConfig:
-    name: str
+    title: str
+    difficulty: str
+    minutes: float
+    hint: str
     prompt: str
     censor: str
     memory_messages: int
     max_reply_chars: int
     temperature: float
+    easier_option: int | None = None
 
 
 @dataclass(frozen=True)
@@ -32,12 +36,8 @@ class GameConfig:
     model_timeout_s: float
     max_output_tokens: int
     team_names: dict[str, str]
-    game_minutes: float
-    tiebreaker_minutes: float
     wrong_guess_cooldown_s: float
     tie_window_s: float
-    hint_minutes: tuple[float, ...]
-    hints: tuple[str, ...]
     rounds: tuple[RoundConfig, ...]
     tiebreaker: RoundConfig
 
@@ -50,13 +50,18 @@ class Settings:
 
 def _round(raw: dict, where: str) -> RoundConfig:
     try:
+        easier = raw.get("easier_option")
         rnd = RoundConfig(
-            name=str(raw["name"]),
+            title=str(raw["title"]),
+            difficulty=str(raw["difficulty"]),
+            minutes=float(raw["minutes"]),
+            hint=str(raw.get("hint", "")),
             prompt=str(raw["prompt"]),
             censor=str(raw["censor"]),
             memory_messages=int(raw["memory_messages"]),
             max_reply_chars=int(raw["max_reply_chars"]),
             temperature=float(raw["temperature"]),
+            easier_option=None if easier is None else int(easier),
         )
     except KeyError as exc:
         raise ConfigError(f"{where} is missing {exc.args[0]!r}") from None
@@ -64,6 +69,8 @@ def _round(raw: dict, where: str) -> RoundConfig:
         raise ConfigError(f"{where} prompt must contain {{code}}")
     if rnd.censor not in CENSOR_MODES:
         raise ConfigError(f"{where} censor must be one of {', '.join(CENSOR_MODES)}")
+    if not 0 < rnd.minutes <= 60:
+        raise ConfigError(f"{where} minutes must be between 0 and 60")
     return rnd
 
 
@@ -75,12 +82,8 @@ def parse_config(raw: dict) -> GameConfig:
             model_timeout_s=float(raw["model_timeout_s"]),
             max_output_tokens=int(raw["max_output_tokens"]),
             team_names={"a": str(raw["team_names"]["a"]), "b": str(raw["team_names"]["b"])},
-            game_minutes=float(raw["game_minutes"]),
-            tiebreaker_minutes=float(raw["tiebreaker_minutes"]),
             wrong_guess_cooldown_s=float(raw["wrong_guess_cooldown_s"]),
             tie_window_s=float(raw["tie_window_s"]),
-            hint_minutes=tuple(float(m) for m in raw["hint_minutes"]),
-            hints=tuple(str(h) for h in raw["hints"]),
             rounds=tuple(_round(r, f"rounds[{i}]") for i, r in enumerate(raw["rounds"])),
             tiebreaker=_round(raw["tiebreaker"], "tiebreaker"),
         )
@@ -90,8 +93,9 @@ def parse_config(raw: dict) -> GameConfig:
         raise ConfigError("config.json needs at least one entry in 'models'")
     if not cfg.rounds:
         raise ConfigError("config.json needs at least one round")
-    if len(cfg.hints) != len(cfg.hint_minutes):
-        raise ConfigError("'hints' and 'hint_minutes' must have the same length")
+    for i, rnd in enumerate(cfg.rounds):
+        if rnd.easier_option is not None and not 1 <= rnd.easier_option <= i:
+            raise ConfigError(f"rounds[{i}] easier_option must name an earlier round (1 to {i})")
     return cfg
 
 

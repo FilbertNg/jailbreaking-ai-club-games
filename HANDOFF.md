@@ -8,10 +8,9 @@ A two-team jailbreak game for an AI Club event. Each team chats with VaultBot (a
 
 ## Current state
 
-- All 11 planned tasks are built and committed on `master` (11 commits, local only).
-- `uv run pytest`: 107 tests pass.
-- Played end to end in a browser at 360, 768 and 1366 px: lobby, chat, wrong and correct codes, hints, skip, win, tie, tiebreaker, award, new session, results page, server restart.
-- **Not done yet:** no GitHub remote. Laptop B cannot `git clone` until the repo is pushed.
+- Built and committed on `master`, pushed to https://github.com/FilbertNg/jailbreaking-ai-club-games.
+- `uv run pytest`: 112 tests pass.
+- Played end to end in a browser: lobby, timed rounds, pause, add and set time, hints, end round, Round 3 Medium/Hard choice, chat with the real model, codes revealed, winner, tie, tiebreaker, award, new session, results page, server restart.
 
 ## Run it
 
@@ -26,7 +25,7 @@ Needs `.env` in this folder with `GEMINI_API_KEY`, `HOST_PIN` (currently `2468`,
 
 | Path | Job |
 | --- | --- |
-| `config.json` | Models, timers, hints, guard prompt per round. Edit this to change the game. |
+| `config.json` | Models, and per round: title, difficulty, base minutes, hint, guard prompt. Edit this to change the game. |
 | `src/jailbreak/config.py` | Loads and checks `config.json` and `.env`. |
 | `src/jailbreak/game.py` | All game rules. Pure Python, clock passed in, no network. |
 | `src/jailbreak/censor.py` | Blocks replies that contain the code (`digits` or `strict` mode). |
@@ -43,8 +42,11 @@ A chat message goes: page, `POST /api/chat`, per-team lock (one message at a tim
 
 - **Model chain:** `gemini-3.5-flash-lite`, then `gemini-3.1-flash-lite`, then `gemma-4-26b-a4b-it`. A model that rate-limits, errors, times out (30 s) or returns empty text is skipped for 60 s. A 401/403 stops at once, since another model will not fix a bad key. `max_retries=0` on every model so a limited model falls through immediately.
 - **Short answers in Round 3** come from cutting the reply to 160 characters on the server, not from a low token limit. Gemma 4 spends output tokens on thinking first, and a 60-token limit returned empty replies in testing.
-- **Random codes, revealed later:** every team, round, session and tiebreaker gets a new random code (1000 to 9999). A code is shown on both screens once it is cracked or skipped, and every uncracked code is shown when time runs out. Ended sessions list their codes on the results page.
-- **First to Round 3 wins, the other team keeps playing:** the winner is set at once, but the session runs until the timer ends (or until both teams finish), so the results show how far both got.
+- **Shared timed rounds:** both teams play Round N at the same time on one clock (base 3 minutes, set per round in the lobby or when starting a round). A round ends at 0:00 or as soon as both teams crack it. Between rounds the game waits for the host. The host can add time, set the time left, pause, show the hint early, or end the round.
+- **Round 3 difficulty:** `easier_option` in `config.json` lets the host start Round 3 as Medium (the Round 2 guard, new code) instead of Hard. The choice is saved as the session's `plan`.
+- **Winner:** most vaults cracked, then the lower total crack time (seconds from each round's start, pauses excluded). Within `tie_window_s` (10 s) or 0 to 0 is a tie.
+- **Hints:** one per round, shown at the halfway point of that round's (possibly extended) time, or earlier by the host.
+- **Random codes, revealed later:** every team, round, session and tiebreaker gets a new random code (1000 to 9999). A code is shown on both screens once it is cracked, and every uncracked code when its round ends. Ended sessions list their codes on the results page.
 - **Sessions, not reset:** "New session" saves the current result (or "stopped early") to `results.jsonl` and opens a fresh lobby with a new number. In the lobby it only renames, so session numbers have no gaps.
 - **Host controls** live in a PIN-locked dialog on the team page. There is no separate dashboard. The PIN is remembered per browser tab.
 - **Look:** a security case file. Paper colors, Courier Prime for the transcript, Public Sans for the interface, one red stamp accent. Light theme only, on purpose.
@@ -74,9 +76,9 @@ Samples are small. Play one full session yourself before the event.
 
 ## Next steps
 
-1. Push the repo to GitHub (private is safest) so Laptop B can clone it. `.env`, `state.json` and `results.jsonl` are gitignored.
-2. Change `HOST_PIN` in `.env`.
-3. On Laptop B: clone, `uv sync`, create its own `.env`, run `uv run jailbreak` once to confirm it works as a backup server.
+1. Change `HOST_PIN` in `.env`.
+2. On Laptop B: `git clone https://github.com/FilbertNg/jailbreaking-ai-club-games.git`, `uv sync`, create its own `.env`, run `uv run jailbreak` once to confirm it works as a backup server.
+3. Play-test the round times: 3 minutes per round is the starting guess, and replies take 3 to 12 seconds each.
 4. Play one full session on both laptops over the event Wi-Fi. Allow Python through Windows Firewall on private networks.
 5. Before the first session, delete `state.json` and `results.jsonl` so the event starts at session 1.
 

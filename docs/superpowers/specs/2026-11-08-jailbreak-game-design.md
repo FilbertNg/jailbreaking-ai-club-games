@@ -208,3 +208,19 @@ Written test-first with pytest.
 ## Out of scope
 
 Accounts, more than two teams, phone-only play, a separate host dashboard or projector board, a local model, enforcing the relay rule in code.
+
+## Change log
+
+### 2026-11-08: shared timed rounds
+
+Replaces the single 10-minute session clock and the "first to clear Round 3 wins at once" rule described above. Where this section and earlier sections disagree, this section wins.
+
+- Phases: `lobby`, `round`, `intermission`, `tie`, `tiebreaker`, `tiebreak_over`, `finished`.
+- Both teams play each round at the same time on one shared clock. Base time per round comes from `config.json` (`minutes`, default 3) and can be changed in the lobby (`round-minutes`) or per round when starting it (`start-round` with `minutes`).
+- A round ends when the clock reaches 0:00, when both teams have cracked it, or when the host presses End round. Uncracked codes are revealed as `unsolved`. The game then waits in `intermission` for the host.
+- Host clock controls during a round or the tiebreaker: `add-time`, `set-time`, `pause`, `resume`. While paused, chat and guesses are refused for both teams and the clock and crack timing stop.
+- Round 3 can be started as Hard (its own guard) or Medium (`easier_option: 2`, the Round 2 guard with a new code). The played difficulties are stored as `plan` in each result.
+- Hints are one per round (`hint` in each round config), shown at half of the round's current allowed time, or earlier with `show-hint`.
+- Winner: most vaults cracked (`more_vaults`), else the lower total crack time (`faster_total`). Totals within `tie_window_s` or 0 to 0 give `tie`.
+- The per-team skip action is removed; `end-round` replaces it.
+- Removed config keys: `game_minutes`, `tiebreaker_minutes`, `hint_minutes`, `hints`. The tiebreaker uses its own `minutes`.

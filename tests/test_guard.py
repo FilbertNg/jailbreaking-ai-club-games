@@ -94,7 +94,7 @@ def test_cut_reply():
     assert "wor…" not in cut
 
 
-ROUND = RoundConfig(name="Round 2", prompt="Code is {code}.", censor="digits",
+ROUND = RoundConfig(title="Strict", difficulty="Medium", minutes=3, hint="", prompt="Code is {code}.", censor="digits",
                     memory_messages=2, max_reply_chars=200, temperature=0.7)
 HISTORY = [
     {"role": "you", "text": "one", "censored": False},

@@ -1,4 +1,5 @@
 const team = location.pathname.split("/").filter(Boolean).pop();
+const other = team === "a" ? "b" : "a";
 const $ = (id) => document.getElementById(id);
 
 const els = {
@@ -16,9 +17,8 @@ const els = {
 };
 
 const HOW_ENDED = {
-  cracked_all: (s) => `Cracked all ${s.rounds_total} vaults.`,
-  more_rounds: () => "More vaults cracked when time ran out.",
-  faster_clear: () => "Same number of vaults, but cracked the last one sooner.",
+  more_vaults: () => "Cracked more vaults.",
+  faster_total: () => "Same number of vaults, but cracked them faster in total.",
   tiebreaker: () => "Won the tiebreaker.",
   host_award: () => "Awarded by the host.",
 };
@@ -27,7 +27,7 @@ const REVEAL_HOW = { cracked: "cracked", skipped: "skipped by the host", unsolve
 
 function revealText(r, names) {
   const vault = r.vault === null ? "Tiebreaker" : `Vault ${r.vault}`;
-  return `${names[r.team]} · ${vault} · ${r.code} (${REVEAL_HOW[r.how]})`;
+  return `${names[r.team]} · ${vault} · ${r.code} (${REVEAL_HOW[r.how] || r.how})`;
 }
 
 let state = null;
@@ -38,6 +38,7 @@ let sending = false;
 let guessing = false;
 let hintsOpen = true;
 let confirmNew = false;
+let confirmEnd = false;
 const nextNames = { a: "", b: "" };
 let hostPin = readPin();
 
@@ -86,6 +87,9 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+const isPlaying = (s) => s.phase === "round" || s.phase === "tiebreaker";
+const canPlay = (s) => isPlaying(s) && !s.paused && !s.cracked_this_round[team];
+
 async function poll() {
   try {
     const s = await api(`/api/state?team=${team}`);
@@ -99,7 +103,8 @@ async function poll() {
 function titleFor(s) {
   switch (s.phase) {
     case "lobby": return "Waiting for the host to start";
-    case "running": return s.round_name;
+    case "round": return s.round_name;
+    case "intermission": return `Round ${s.round_number} is over`;
     case "tie": return "Tie";
     case "tiebreaker": return s.round_name;
     case "tiebreak_over": return "Time is up";
@@ -111,14 +116,15 @@ function render(s) {
   const prev = state;
   state = s;
   const names = s.team_names;
-  els.session.textContent = `Session ${s.session}`;
-  els.teamName.textContent = names[team];
+  const where = s.phase === "lobby" ? "" : s.round_number ? ` · Round ${s.round_number} of ${s.rounds_total}` : " · Tiebreaker";
+  els.session.textContent = `Session ${s.session}${where}${s.paused ? " · Paused" : ""}`;
+  els.teamName.textContent = isPlaying(s) ? `${names[team]} · ${s.difficulty}` : names[team];
   document.title = `${names[team]} · VaultBot`;
   els.title.textContent = titleFor(s);
   els.timer.textContent = s.seconds_left == null ? "--:--" : fmt(s.seconds_left);
-  els.timer.classList.toggle("low", s.seconds_left != null && s.seconds_left <= 60);
+  els.timer.classList.toggle("low", s.seconds_left != null && s.seconds_left <= 30 && !s.paused);
   els.score.textContent = `${names.a} ${s.rounds_cleared.a}/${s.rounds_total} · ${names.b} ${s.rounds_cleared.b}/${s.rounds_total}`;
-  renderHints(s, prev);
+  renderNotes(s, prev);
   renderNotice(s);
   renderChat(s);
   renderControls(s);
@@ -126,7 +132,7 @@ function render(s) {
   if (els.hostDialog.open) renderHost(s);
 }
 
-function renderHints(s, prev) {
+function renderNotes(s, prev) {
   const count = s.hints.length + s.reveals.length;
   els.hintCard.hidden = count === 0;
   if (count === 0) return;
@@ -148,24 +154,30 @@ function renderHints(s, prev) {
   els.notesBody.hidden = !hintsOpen;
   els.hintToggle.setAttribute("aria-expanded", String(hintsOpen));
   const parts = [];
-  if (s.hints.length) parts.push(`${s.hints.length} of ${s.hints_total} hints`);
+  if (s.hints.length) parts.push(`${s.hints.length} ${s.hints.length === 1 ? "hint" : "hints"}`);
   if (s.reveals.length) parts.push(`${s.reveals.length} ${s.reveals.length === 1 ? "code" : "codes"}`);
   els.hintToggle.textContent = `${parts.join(", ")} (${hintsOpen ? "hide" : "show"})`;
 }
 
-function renderNotice(s) {
-  const show = s.phase === "running" && s.winner && s.winner !== team;
-  els.notice.hidden = !show;
-  if (show) {
-    els.notice.textContent = `${s.team_names[s.winner]} cracked all ${s.rounds_total} vaults and won. Keep playing until the timer ends to see how far you get.`;
+function noticeFor(s) {
+  if (isPlaying(s) && s.paused) return "Paused by the host. The clock is stopped.";
+  if (s.phase === "round" && s.cracked_this_round[team]) {
+    return `Vault cracked. Wait for ${s.team_names[other]} or for the clock to run out.`;
   }
+  if (s.phase === "intermission" && s.next_round) return `Waiting for the host to start Round ${s.next_round.number}.`;
+  return "";
+}
+
+function renderNotice(s) {
+  const text = noticeFor(s);
+  els.notice.hidden = !text;
+  els.notice.textContent = text;
 }
 
 function emptyText(s) {
   if (s.phase === "lobby") return "Waiting for the host to start the session.";
-  if (s.phase === "running" || s.phase === "tiebreaker") {
-    return "No messages yet. Say hello to VaultBot, then try to get the code out of it.";
-  }
+  if (isPlaying(s)) return "No messages yet. Say hello to VaultBot, then try to get the code out of it.";
+  if (s.phase === "intermission") return "Round over. The revealed codes are in the notes.";
   return "";
 }
 
@@ -193,8 +205,7 @@ function renderChat(s) {
 }
 
 function renderControls(s) {
-  const doneEarly = s.phase === "running" && s.team_done[team];
-  const active = (s.phase === "running" || s.phase === "tiebreaker") && !doneEarly;
+  const active = canPlay(s);
   els.message.disabled = !active;
   els.sendBtn.disabled = !active || sending || s.busy;
   els.code.disabled = !active;
@@ -206,13 +217,10 @@ function renderControls(s) {
 function renderOverlay(s) {
   let stamp = "";
   let text = "";
-  const other = team === "a" ? "b" : "a";
-  if (s.phase === "running" && s.winner === team) {
-    stamp = "YOU WIN";
-    text = `${s.team_names[team]} cracked all ${s.rounds_total} vaults first. ${s.team_names[other]} keeps playing until the timer ends.`;
-  } else if (s.phase === "finished" && s.winner) {
+  if (s.phase === "finished" && s.winner) {
     stamp = s.winner === team ? "YOU WIN" : "SESSION OVER";
-    text = `${s.team_names[s.winner]} wins session ${s.session}. ${HOW_ENDED[s.how_ended](s)}`;
+    const how = HOW_ENDED[s.how_ended] ? HOW_ENDED[s.how_ended](s) : "";
+    text = `${s.team_names[s.winner]} wins session ${s.session}. ${how}`;
   } else if (s.phase === "tie") {
     stamp = "TIE";
     text = "Tie. Waiting for the host to start the tiebreaker.";
@@ -223,7 +231,7 @@ function renderOverlay(s) {
   els.overlay.hidden = !stamp;
   els.overlayStamp.textContent = stamp;
   els.overlayText.textContent = text;
-  const unsolved = s.phase === "running" ? [] : s.reveals.filter((r) => r.how === "unsolved");
+  const unsolved = stamp ? s.reveals.filter((r) => r.how === "unsolved") : [];
   els.overlayCodesTitle.hidden = els.overlayCodes.hidden = unsolved.length === 0;
   els.overlayCodes.replaceChildren(...unsolved.map((r) => el("li", {}, revealText(r, s.team_names))));
 }
@@ -236,7 +244,7 @@ function showStamp(word) {
 
 els.hintToggle.addEventListener("click", () => {
   hintsOpen = !hintsOpen;
-  if (state) renderHints(state, state);
+  if (state) renderNotes(state, state);
 });
 
 els.message.addEventListener("keydown", (e) => {
@@ -304,9 +312,14 @@ els.guessForm.addEventListener("submit", async (e) => {
 /* Host dialog */
 
 const DONE = {
-  start: () => "The timer is running.",
-  "next-hint": () => "Hint shown on both screens.",
-  skip: (b) => `Round skipped for ${state.team_names[b.team]}.`,
+  "start-round": () => `Round ${state.round_number} started.`,
+  "end-round": () => "Round ended. The codes are revealed.",
+  pause: () => "Paused. Both clocks and chats are frozen.",
+  resume: () => "Resumed.",
+  "add-time": (b) => `Added ${b.seconds / 60} min.`,
+  "set-time": () => `Time left is now ${fmt(state.seconds_left)}.`,
+  "show-hint": () => "Hint shown on both screens.",
+  "round-minutes": () => "Round times saved.",
   tiebreaker: () => "Tiebreaker started.",
   award: (b) => `${state.team_names[b.team]} wins session ${state.session}.`,
   "new-session": () => `Session ${state.session} is ready. Press Start when both teams are seated.`,
@@ -321,6 +334,7 @@ async function runHost(action, body = {}) {
       body: JSON.stringify(body),
     });
     confirmNew = false;
+    confirmEnd = false;
     if (action === "new-session") { nextNames.a = ""; nextNames.b = ""; }
     await poll();
     note(els.hostNote, DONE[action](body));
@@ -340,6 +354,21 @@ function nameField(id, label, value, onInput) {
   input.value = value;
   input.addEventListener("input", () => onInput(input.value));
   return [el("label", { for: id }, label), input];
+}
+
+function minutesField(id, label, value) {
+  const input = el("input", { id, type: "number", min: "0.5", max: "60", step: "0.5", inputmode: "decimal" });
+  input.value = String(value);
+  return [el("label", { for: id }, label), input];
+}
+
+function readMinutes(id) {
+  const value = parseFloat($(id).value);
+  if (!(value > 0 && value <= 60)) {
+    note(els.hostNote, "Use a number of minutes between 0.5 and 60.", true);
+    return null;
+  }
+  return value;
 }
 
 function pinForm() {
@@ -368,44 +397,116 @@ function section(title, ...children) {
   return el("section", { class: "host-section" }, el("h3", {}, title), ...children);
 }
 
-function currentSection(s) {
+function row(...children) {
+  return el("div", { class: "host-row" }, ...children);
+}
+
+function clockSection(s) {
+  const parts = [
+    el("p", { id: "host-clock", class: "host-clock" }, clockText(s)),
+    row(
+      hostButton("+1 min", "add-time", { seconds: 60 }, "quiet"),
+      hostButton("+3 min", "add-time", { seconds: 180 }, "quiet"),
+      s.paused ? hostButton("Resume", "resume") : hostButton("Pause", "pause", {}, "quiet"),
+    ),
+  ];
+  const setForm = el("form", { class: "host-form" },
+    ...minutesField("set-minutes", "Set time left to (minutes)", Math.max(0.5, Math.round((s.seconds_left || 60) / 30) / 2)),
+    el("button", { type: "submit", class: "quiet" }, "Set time left"));
+  setForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const minutes = readMinutes("set-minutes");
+    if (minutes) runHost("set-time", { seconds: Math.round(minutes * 60) });
+  });
+  parts.push(setForm);
+  if (s.phase === "round") {
+    if (!s.hint_given) parts.push(hostButton("Show this round's hint now", "show-hint", {}, "quiet"));
+    if (confirmEnd) {
+      parts.push(el("p", { class: "note alert" }, "Both teams stop now and any uncracked code is revealed."));
+      parts.push(hostButton(`Yes, end round ${s.round_number} now`, "end-round", {}, "danger"));
+    } else {
+      parts.push(el("button", { type: "button", class: "quiet", onclick: () => { confirmEnd = true; renderHost(state, true); } },
+        "End this round now"));
+    }
+  }
+  return section(s.phase === "tiebreaker" ? "Tiebreaker clock" : `Round ${s.round_number} clock`, ...parts);
+}
+
+function clockText(s) {
+  if (s.seconds_left == null) return "";
+  return `${fmt(s.seconds_left)} left${s.paused ? " (paused)" : ""}`;
+}
+
+function startSection(s) {
+  const nxt = s.next_round;
+  const parts = [...minutesField("start-minutes", `Round ${nxt.number} time (minutes)`, nxt.minutes)];
+  for (const opt of nxt.options) {
+    const label = nxt.options.length > 1
+      ? `Start round ${nxt.number}: ${opt.difficulty} (${opt.title})`
+      : `Start round ${nxt.number}`;
+    parts.push(el("button", {
+      type: "button",
+      class: opt === nxt.options[0] ? "" : "quiet",
+      onclick: () => {
+        const minutes = readMinutes("start-minutes");
+        if (minutes) runHost("start-round", { minutes, variant: opt.variant });
+      },
+    }, label));
+  }
+  const repeat = nxt.options.find((o) => o.variant !== nxt.number);
+  if (repeat) {
+    parts.push(el("p", { class: "note" }, `${repeat.difficulty} uses the Round ${repeat.variant} guard again with a new code, for teams that need an easier finish.`));
+  }
+  return section(`Next: Round ${nxt.number} of ${s.rounds_total}`, el("div", { class: "host-form" }, ...parts));
+}
+
+function lobbySection(s) {
+  const n = s.team_names;
+  const names = { a: n.a, b: n.b };
+  const nameForm = el("form", { class: "host-form" },
+    ...nameField("rename-a", "Name on screen A", n.a, (v) => { names.a = v; }),
+    ...nameField("rename-b", "Name on screen B", n.b, (v) => { names.b = v; }),
+    el("button", { type: "submit", class: "quiet" }, "Save names"));
+  nameForm.addEventListener("submit", (e) => { e.preventDefault(); runHost("rename", names); });
+
+  const timeFields = s.base_minutes.flatMap((m, i) => minutesField(`base-${i}`, `Round ${i + 1} base time (minutes)`, m));
+  const timeForm = el("form", { class: "host-form" }, ...timeFields,
+    el("button", { type: "submit", class: "quiet" }, "Save round times"));
+  timeForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const values = s.base_minutes.map((_, i) => readMinutes(`base-${i}`));
+    if (values.every((v) => v)) runHost("round-minutes", { round_minutes: values });
+  });
+  return [section("Team names", nameForm), section("Round times", timeForm)];
+}
+
+function resultSection(s) {
   const n = s.team_names;
   const parts = [];
-  if (s.phase === "lobby") {
-    parts.push(hostButton(`Start session ${s.session}`, "start"));
-    const names = { a: n.a, b: n.b };
-    const form = el("form", { class: "host-form" },
-      ...nameField("rename-a", "Name on screen A", n.a, (v) => { names.a = v; }),
-      ...nameField("rename-b", "Name on screen B", n.b, (v) => { names.b = v; }),
-      el("button", { type: "submit", class: "quiet" }, "Save names"));
-    form.addEventListener("submit", (e) => { e.preventDefault(); runHost("rename", names); });
-    parts.push(form);
-  } else if (s.phase === "running") {
-    parts.push(hostButton(`Show the next hint (${s.hints.length} of ${s.hints_total} showing)`, "next-hint"));
-    for (const t of ["a", "b"]) {
-      if (!s.team_done[t]) parts.push(hostButton(`Skip this round for ${n[t]}`, "skip", { team: t }, "quiet"));
-    }
-  } else if (s.phase === "tie") {
-    parts.push(
-      hostButton("Start the tiebreaker", "tiebreaker"),
+  if (s.phase === "tie") {
+    parts.push(el("p", {}, `Vaults: ${n.a} ${s.rounds_cleared.a}, ${n.b} ${s.rounds_cleared.b}. Total crack time: ${n.a} ${fmt(Math.round(s.total_time.a))}, ${n.b} ${fmt(Math.round(s.total_time.b))}.`));
+    const form = el("form", { class: "host-form" }, ...minutesField("tb-minutes", "Tiebreaker time (minutes)", s.tiebreaker_minutes),
+      el("button", { type: "submit" }, "Start the tiebreaker"));
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const minutes = readMinutes("tb-minutes");
+      if (minutes) runHost("tiebreaker", { minutes });
+    });
+    parts.push(form,
       hostButton(`Award the win to ${n.a}`, "award", { team: "a" }, "quiet"),
-      hostButton(`Award the win to ${n.b}`, "award", { team: "b" }, "quiet"),
-    );
-  } else if (s.phase === "tiebreaker") {
-    parts.push(el("p", {}, "Tiebreaker running. The first correct code wins."));
+      hostButton(`Award the win to ${n.b}`, "award", { team: "b" }, "quiet"));
   } else if (s.phase === "tiebreak_over") {
     parts.push(
       el("p", {}, `Wrong guesses in the tiebreaker: ${n.a} ${s.tiebreak_wrong.a}, ${n.b} ${s.tiebreak_wrong.b}. Fewer wrong guesses wins.`),
       hostButton(`Award the win to ${n.a}`, "award", { team: "a" }),
-      hostButton(`Award the win to ${n.b}`, "award", { team: "b" }),
-    );
+      hostButton(`Award the win to ${n.b}`, "award", { team: "b" }));
   } else if (s.phase === "finished") {
     parts.push(el("p", {}, s.winner ? `${n[s.winner]} won session ${s.session}. It is saved on the results page.` : `Session ${s.session} ended.`));
   }
-  return section(`Session ${s.session}`, ...parts);
+  return parts.length ? [section(`Session ${s.session} result`, ...parts)] : [];
 }
 
-function nextSection(s) {
+function nextSessionSection(s) {
   const stillPlaying = !["lobby", "finished"].includes(s.phase);
   const form = el("form", { class: "host-form" },
     ...nameField("next-a", "Next team on screen A", nextNames.a, (v) => { nextNames.a = v; }),
@@ -416,7 +517,7 @@ function nextSection(s) {
   const label = stillPlaying && confirmNew
     ? `Yes, stop session ${s.session} and start session ${s.session + 1}`
     : `Save session ${s.session} and start session ${s.session + 1}`;
-  form.append(el("button", { type: "submit", class: stillPlaying && confirmNew ? "danger" : "" }, label));
+  form.append(el("button", { type: "submit", class: stillPlaying && confirmNew ? "danger" : "quiet" }, label));
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!nextNames.a.trim() || !nextNames.b.trim()) {
@@ -435,17 +536,27 @@ function nextSection(s) {
 
 function renderHost(s, force = false) {
   if (!s) return;
-  const key = `${s.session}|${s.phase}|${s.hints.length}|${s.team_done.a}|${s.team_done.b}|${hostPin ? 1 : 0}|${confirmNew}`;
-  if (!force && key === hostKey) return;
+  const key = [s.session, s.phase, s.paused, s.round_number, s.hint_given, hostPin ? 1 : 0, confirmNew, confirmEnd].join("|");
+  if (!force && key === hostKey) {
+    const clock = $("host-clock");
+    if (clock) clock.textContent = clockText(s);
+    return;
+  }
+  if (!force && hostKey) note(els.hostNote, "");
   hostKey = key;
   if (!hostPin) { els.hostBody.replaceChildren(pinForm()); return; }
-  const parts = [currentSection(s)];
-  if (s.phase !== "lobby") parts.push(nextSection(s));
+  const parts = [];
+  if (isPlaying(s)) parts.push(clockSection(s));
+  if (s.next_round) parts.push(startSection(s));
+  if (s.phase === "lobby") parts.push(...lobbySection(s));
+  parts.push(...resultSection(s));
+  if (s.phase !== "lobby") parts.push(nextSessionSection(s));
   els.hostBody.replaceChildren(...parts);
 }
 
 els.hostBtn.addEventListener("click", () => {
   confirmNew = false;
+  confirmEnd = false;
   note(els.hostNote, "");
   renderHost(state, true);
   els.hostDialog.showModal();

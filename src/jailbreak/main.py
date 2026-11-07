@@ -38,6 +38,10 @@ class HostIn(BaseModel):
     team: str | None = None
     a: str | None = None
     b: str | None = None
+    minutes: float | None = None
+    variant: int | None = None
+    seconds: float | None = None
+    round_minutes: list[float] | None = None
 
 
 def _save_json(path: Path, data: dict) -> None:
@@ -143,19 +147,19 @@ def create_app(
             raise HTTPException(409, "VaultBot is still answering your last message.")
         async with locks[team]:
             ctx = game.chat_context(team)
-            round_tag = ctx.round.name.split(":")[0].strip().lower().replace(" ", "-")
             try:
                 reply = await guard.reply(
                     round_cfg=ctx.round,
                     code=ctx.code,
                     history=ctx.history,
                     message=message,
-                    tags=[f"session-{game.session}", f"team-{team}", round_tag],
+                    tags=[f"session-{game.session}", f"team-{team}", ctx.tag],
                     metadata={
                         "session": game.session,
                         "team": team,
                         "team_name": game.teams[team].name,
-                        "round": ctx.round.name,
+                        "round": ctx.name,
+                        "difficulty": ctx.round.difficulty,
                     },
                 )
             except GuardBusy:
@@ -174,16 +178,32 @@ def create_app(
     async def host(action: str, body: HostIn, x_host_pin: str | None = Header(default=None)) -> dict:
         check_pin(x_host_pin)
         names = {"a": body.a, "b": body.b}
+
+        def need(value, what: str):
+            if value is None:
+                raise HTTPException(422, f"Send {what}.")
+            return value
+
         if action == "check":
             pass
-        elif action == "start":
-            game.start()
-        elif action == "next-hint":
-            game.next_hint()
-        elif action == "skip":
-            game.skip_round(check_team(body.team))
+        elif action == "start-round":
+            game.start_round(minutes=body.minutes, variant=body.variant)
+        elif action == "end-round":
+            game.end_round()
+        elif action == "pause":
+            game.pause()
+        elif action == "resume":
+            game.resume()
+        elif action == "add-time":
+            game.add_time(need(body.seconds, "the seconds to add"))
+        elif action == "set-time":
+            game.set_time(need(body.seconds, "the seconds left"))
+        elif action == "show-hint":
+            game.show_hint()
+        elif action == "round-minutes":
+            game.set_round_minutes(need(body.round_minutes, "a time for each round"))
         elif action == "tiebreaker":
-            game.start_tiebreaker()
+            game.start_tiebreaker(minutes=body.minutes)
         elif action == "award":
             game.award(check_team(body.team))
         elif action == "new-session":

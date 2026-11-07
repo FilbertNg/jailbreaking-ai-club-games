@@ -45,8 +45,9 @@ def client(tmp_path, cfg, clock):
     return TestClient(make_app(tmp_path, cfg, clock))
 
 
-def start(client):
-    assert client.post("/api/host/start", json={}, headers=PIN).status_code == 200
+def start(client, **body):
+    res = client.post("/api/host/start-round", json=body, headers=PIN)
+    assert res.status_code == 200, res.text
 
 
 def codes(client):
@@ -65,7 +66,7 @@ def test_state_never_contains_codes(client):
     start(client)
     res = client.get("/api/state", params={"team": "a"})
     assert res.status_code == 200
-    assert res.json()["phase"] == "running"
+    assert res.json()["phase"] == "round"
     assert res.json()["busy"] is False
     for code in codes(client):
         assert code not in res.text
@@ -76,14 +77,14 @@ def test_unknown_team_is_404(client):
 
 
 def test_host_needs_the_right_pin(client):
-    assert client.post("/api/host/start", json={}).status_code == 401
-    assert client.post("/api/host/start", json={}, headers={"X-Host-Pin": "9"}).status_code == 401
+    assert client.post("/api/host/start-round", json={}).status_code == 401
+    assert client.post("/api/host/start-round", json={}, headers={"X-Host-Pin": "9"}).status_code == 401
     assert client.post("/api/host/check", json={}, headers=PIN).status_code == 200
 
 
 def test_host_off_without_pin(tmp_path, cfg, clock):
     client = TestClient(make_app(tmp_path, cfg, clock, pin=None))
-    res = client.post("/api/host/start", json={}, headers=PIN)
+    res = client.post("/api/host/start-round", json={}, headers=PIN)
     assert res.status_code == 403
     assert "HOST_PIN" in res.json()["detail"]
 
@@ -126,9 +127,9 @@ def test_second_message_while_waiting_is_409(tmp_path, cfg, clock):
     async def scenario():
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            await client.post("/api/host/start", json={}, headers=PIN)
+            await client.post("/api/host/start-round", json={}, headers=PIN)
             first = asyncio.create_task(client.post("/api/chat", json={"team": "a", "message": "hi"}))
-            await guard.started.wait()
+            await asyncio.wait_for(guard.started.wait(), 5)
             busy = (await client.get("/api/state", params={"team": "a"})).json()["busy"]
             second = await client.post("/api/chat", json={"team": "a", "message": "again"})
             other_team = asyncio.create_task(client.post("/api/chat", json={"team": "b", "message": "hi"}))
@@ -156,14 +157,14 @@ def test_results_reveal_ended_codes_but_hide_live_ones_and_chats(client):
     game = client.app.state.game
     client.post("/api/chat", json={"team": "a", "message": "secret chat"})
     ended_codes = codes(client)
-    for _ in range(3):
-        client.post("/api/guess", json={"team": "a", "code": game.code_for("a")})
+    client.post("/api/guess", json={"team": "a", "code": game.code_for("a")})
     client.post("/api/host/new-session", json={"a": "Kopi", "b": "Teh"}, headers=PIN)
     start(client)
     live_codes = [c for c in codes(client) if c not in ended_codes]
     res = client.get("/api/results")
     data = res.json()
-    assert data["sessions"][0]["winner"] == "a"
+    assert data["sessions"][0]["how_ended"] == "stopped_early"
+    assert data["sessions"][0]["teams"]["a"]["rounds_cleared"] == 1
     assert {r["code"] for r in data["sessions"][0]["reveals"]} == set(ended_codes)
     assert data["current"]["session"] == 2
     assert data["current"]["teams"]["a"]["name"] == "Kopi"
@@ -178,9 +179,60 @@ def test_state_survives_restart(tmp_path, cfg, clock):
     start(first)
     second = TestClient(make_app(tmp_path, cfg, clock))
     state = second.get("/api/state", params={"team": "a"}).json()
-    assert state["phase"] == "running"
+    assert state["phase"] == "round"
     assert state["team_names"]["a"] == "Kopi"
 
 
 def test_unknown_host_action_is_404(client):
     assert client.post("/api/host/explode", json={}, headers=PIN).status_code == 404
+
+
+def host(client, action, **body):
+    return client.post(f"/api/host/{action}", json=body, headers=PIN)
+
+
+def seconds_left(client):
+    return client.get("/api/state", params={"team": "a"}).json()["seconds_left"]
+
+
+def test_round_minutes_and_custom_start(client):
+    assert host(client, "round-minutes", round_minutes=[2, 3, 4]).status_code == 200
+    assert client.get("/api/state", params={"team": "a"}).json()["base_minutes"] == [2, 3, 4]
+    start(client, minutes=5)
+    assert seconds_left(client) == 300
+
+
+def test_clock_controls(client, clock):
+    start(client)
+    assert host(client, "add-time", seconds=60).status_code == 200
+    assert seconds_left(client) == 240
+    assert host(client, "pause").status_code == 200
+    clock.advance(100)
+    state = client.get("/api/state", params={"team": "a"}).json()
+    assert state["paused"] is True and state["seconds_left"] == 240
+    assert client.post("/api/chat", json={"team": "a", "message": "hi"}).status_code == 409
+    assert host(client, "set-time", seconds=90).status_code == 200
+    assert host(client, "resume").status_code == 200
+    assert seconds_left(client) == 90
+    assert host(client, "show-hint").status_code == 200
+    assert host(client, "end-round").status_code == 200
+    assert client.get("/api/state", params={"team": "a"}).json()["phase"] == "intermission"
+
+
+def test_round_three_variant_via_api(client):
+    for _ in range(2):
+        start(client)
+        host(client, "end-round")
+    assert host(client, "start-round", variant=1).status_code == 409
+    start(client, variant=2)
+    state = client.get("/api/state", params={"team": "a"}).json()
+    assert (state["round_number"], state["difficulty"]) == (3, "Medium")
+
+
+def test_chat_is_tagged_with_round(client):
+    start(client)
+    client.post("/api/chat", json={"team": "b", "message": "hi"})
+    call = client.app.state.guard.calls[0]
+    assert "round-1" in call["tags"]
+    assert call["metadata"]["round"] == "Round 1: Friendly"
+    assert call["metadata"]["difficulty"] == "Easy"

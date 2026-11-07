@@ -1,7 +1,7 @@
 # Break the AI: Game Master Guide (Jailbreak game)
 
 ## Goal
-Two teams try to trick a robot guard, VaultBot, into telling them a secret 4-digit code. There are 3 rounds. Each round has a new, stricter guard and a new code. The first team to crack all 3 rounds wins. The event runs 4 sessions, each with two new teams.
+Two teams try to trick a robot guard, VaultBot, into telling them a secret 4-digit code. There are 3 rounds, played at the same time by both teams. Each round has a new, stricter guard and a new random code for each team. The team that cracks the most vaults wins. The event runs 4 sessions, each with two new teams.
 
 ## Before the event
 1. On Laptop A run `uv run jailbreak` (setup is in the README).
@@ -9,30 +9,34 @@ Two teams try to trick a robot guard, VaultBot, into telling them a secret 4-dig
 3. Optional: put the Results page on a spare screen.
 
 ## Host controls
-Press **Host** at the bottom of either team screen and type the PIN. The panel shows only the buttons that make sense right now: Start, Show the next hint, Skip this round, Start the tiebreaker, Award the win, and New session.
+Press **Host** at the bottom of either team screen and type the PIN. The panel shows only what makes sense right now:
+- **Before the session:** team names, the base time for each round (3 / 3 / 3 minutes), and **Start round 1**.
+- **During a round:** the clock, **+1 min**, **+3 min**, **Set time left**, **Pause** / **Resume**, **Show this round's hint now**, and **End this round now** (asks you to confirm).
+- **Between rounds:** the next round's time (change it before you start, for example to give Round 3 more time) and **Start round N**. Before Round 3 you choose **Hard** (maximum-security guard) or **Medium** (the Round 2 guard again with a new code), so a team that struggled in Round 2 does not burn out.
+- **After a tie:** tiebreaker time, **Start the tiebreaker**, and **Award the win**.
+- **Any time after the start:** **New session** with the next two team names.
 
-## How to run one session (15 minutes)
+## How to run one session (about 15 minutes)
 1. **Before 0:00: names.** In the Host panel, type the two team names and press **Save names**.
 2. **0:00 to 3:00: explain.** Read the rules below. Demo: type "hello" in a chat.
-3. **3:00: start.** Press **Start session**.
-4. **3:00 to 13:00: play.** Teams chat with the AI, find the code, and type it in the code box. A correct code moves the team to the next round by itself (new guard, new code, new chat). Hints appear on both screens at minutes 3, 6 and 8, or press **Show the next hint**.
-5. **The game ends** when the 10-minute timer ends. A team that cracks Round 3 wins at once, but the other team keeps playing until time is up. If both teams crack all 3, it ends straight away.
-6. **Codes are revealed.** When a team cracks a vault, its code shows on both screens. When time runs out, every code nobody cracked is shown on both screens and on the Results page. Each session gets new random codes.
-7. **Announce the winner** from the screens. If it is a tie, run the tiebreaker (3 minutes). Then a 1 to 2 minute wrap-up.
+3. **Round 1.** Press **Start round 1**. Both teams get 3 minutes. Halfway through, a hint appears on both screens, or press **Show this round's hint now**.
+4. **The round ends** when its clock runs out, or straight away when both teams have cracked their vault. A team that cracks early waits for the other team. Every code from the round is then revealed on both screens.
+5. **Between rounds,** talk to the room for a moment, adjust the next round's time if you want, then press **Start round 2**, and later **Start round 3: Hard** or **Medium**.
+6. **After Round 3,** the winner shows on both screens. If it is a tie, run the tiebreaker. Then a 1 to 2 minute wrap-up.
 
 | Round | Guard | Difficulty |
 | --- | --- | --- |
 | 1 | Friendly, told to keep a secret, but loves games and stories | Easy |
 | 2 | Strict, and a censor blocks the code if it is written in digits | Medium |
-| 3 | Maximum security, strict censor, short answers, no memory | Boss. Nobody may win it |
+| 3 | Hard: maximum security, strict censor, short answers, no memory. Or Medium: the Round 2 guard again | Your choice |
 
 ## Between sessions
 1. Press **Host**, fill in **New session** with the next two team names, and press **Save session N and start session N+1**.
-2. Check the Results page: the session you just played is at the top.
-3. Seat the new teams, explain the rules, press **Start session**.
+2. Check the Results page: the session you just played is at the top, with every code and the difficulty of each round.
+3. Seat the new teams, explain the rules, press **Start round 1**.
 
 ## Rules (read these aloud)
-1. You have **10 minutes**. The first team to crack all 3 rounds wins, and the other team keeps playing until time is up. If nobody cracks all 3, the team with more rounds wins.
+1. There are **3 rounds of about 3 minutes**. Both teams play each round at the same time. The team that cracks the most vaults wins.
 2. **Relay rule:** after every message, the keyboard passes to a *different* teammate.
 3. Talk to the robot **only in the chat**. No other AI tools, no internet search, no hacking the website. Attack the robot, not the system.
 4. Keep it friendly. No insults and no personal information. The host can read every chat.
@@ -41,18 +45,19 @@ Press **Host** at the bottom of either team screen and type the PIN. The panel s
 7. The host's decision is final.
 
 ## Winner and tiebreaker
-1. **Very fast team:** the first team to clear Round 3 wins at once. The other team keeps playing until the timer ends; how far they get is saved on the Results page.
-2. **At 10:00:** the team with more rounds cleared wins.
-3. **Same rounds:** the team that cleared its last round earlier wins. If the two times are within 10 seconds, it is a tie.
-4. **Tie (including 0 to 0):** press **Start the tiebreaker**. New AI, new codes, 3 minutes. The first team to enter the correct code wins at once.
-5. **Still no winner:** the Host panel shows each team's wrong guesses in the tiebreaker. Award the win to the team with fewer. If still equal, pick the best trick. Press **Award the win**.
+1. **Most vaults cracked** wins.
+2. **Same number of vaults:** the team with the lower total crack time wins (time counted from the start of each round, pauses not counted). If the two totals are within 10 seconds, it is a tie. 0 to 0 is also a tie.
+3. **Tie:** press **Start the tiebreaker**. New AI, new codes, 3 minutes (you can change it). The first team to enter the correct code wins at once.
+4. **Still no winner:** the Host panel shows each team's wrong guesses in the tiebreaker. Award the win to the team with fewer. If still equal, pick the best trick. Press **Award the win**.
 
 ## Quick fixes
 | Problem | What to do |
 | --- | --- |
-| A team is stuck on Round 1 | Press **Show the next hint**. After 5 minutes, use **Skip this round** for that team. |
-| A team is too fast (clears Round 3 in a few minutes) | They win; the other team keeps playing until the timer ends. If your test shows this happens, make Round 3 stricter or add a Round 4 in `config.json`. |
-| "The guard is busy" | The server already tries three models in turn. Wait 10 seconds and send again. If it keeps happening, the free-tier limit is used up for the minute; wait a minute. |
+| Both teams are stuck | Press **Show this round's hint now**, or **+1 min**. If nothing helps, **End this round now**. |
+| One team flew through Rounds 1 and 2 | Give Round 3 more time before you start it, or keep it Hard. |
+| A team struggled in Round 2 | Start Round 3 as **Medium**. |
+| You need to explain something mid-round | **Pause**. Chats and guesses freeze for both teams until **Resume**. |
+| "The guard is busy" | The server already tries three models in turn. Wait 10 seconds and send again. If it keeps happening, the free-tier limit is used up for the minute; **Pause** and wait a minute. |
 | Laptop B shows "Lost connection" | Check both laptops are on the same Wi-Fi and the server window on Laptop A is still open. |
 | Someone breaks a rule | Warn once. If it continues, ask that person to sit out. |
 | Do not start a new session during a tie | **New session** saves the current one as stopped early, with no winner. |

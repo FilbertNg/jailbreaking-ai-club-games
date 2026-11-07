@@ -4,11 +4,12 @@ const conn = document.getElementById("conn-bar");
 let loadedOnce = false;
 
 const PHASE_WORDS = {
-  lobby: "Waiting to start",
-  running: "Playing now",
-  tie: "Tie, waiting for the tiebreaker",
-  tiebreaker: "Tiebreaker running",
-  tiebreak_over: "The host is choosing the winner",
+  lobby: () => "Waiting to start",
+  round: (c) => `Round ${c.round_number} of ${c.rounds_total}`,
+  intermission: (c) => `Between rounds (${c.round_number} of ${c.rounds_total} done)`,
+  tie: () => "Tie, waiting for the tiebreaker",
+  tiebreaker: () => "Tiebreaker running",
+  tiebreak_over: () => "The host is choosing the winner",
 };
 
 function fmt(seconds) {
@@ -26,14 +27,17 @@ function el(tag, cls, ...children) {
 function howText(r) {
   const w = r.winner ? r.teams[r.winner] : null;
   const other = r.winner ? r.teams[r.winner === "a" ? "b" : "a"] : null;
+  let text;
   switch (r.how_ended) {
-    case "cracked_all": return `Cracked all ${r.rounds_total} vaults at ${fmt(w.clear_times.at(-1))}.`;
-    case "more_rounds": return "More vaults cracked when time ran out.";
-    case "faster_clear": return `Same number of vaults. Last one cracked at ${fmt(w.clear_times.at(-1))} against ${fmt(other.clear_times.at(-1))}.`;
-    case "tiebreaker": return "Won the tiebreaker.";
-    case "host_award": return "Awarded by the host after a tie.";
-    default: return "Stopped early. No winner.";
+    case "more_vaults": text = "Cracked more vaults."; break;
+    case "faster_total": text = `Same number of vaults, cracked in ${fmt(w.total_time)} total against ${fmt(other.total_time)}.`; break;
+    case "tiebreaker": text = "Won the tiebreaker."; break;
+    case "host_award": text = "Awarded by the host after a tie."; break;
+    case "stopped_early": text = "Stopped early. No winner."; break;
+    default: text = r.winner ? "Won." : "No winner.";
   }
+  if (r.plan && r.plan.length) text += ` Difficulty: ${r.plan.join(", ")}.`;
+  return text;
 }
 
 function sides(teams, total, winner) {
@@ -72,10 +76,11 @@ function recordEntry(r) {
 
 function liveEntry(c) {
   const clock = c.seconds_left == null ? "" : `, ${fmt(c.seconds_left)} left`;
+  const words = PHASE_WORDS[c.phase] ? PHASE_WORDS[c.phase](c) : "In progress";
   return el("li", "entry live",
     el("div", "", el("p", "entry-num", `Session ${c.session}`), el("p", "entry-when", "In progress")),
     sides(c.teams, c.rounds_total, null),
-    el("p", "verdict none", PHASE_WORDS[c.phase] + clock));
+    el("p", "verdict none", words + clock + (c.paused ? ", paused" : "")));
 }
 
 function render(data) {
