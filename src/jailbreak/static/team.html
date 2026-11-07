@@ -1,1 +1,76 @@
-<!doctype html><title>placeholder</title>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VaultBot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Public+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/case.css">
+</head>
+<body class="team-page">
+  <div id="conn-bar" class="conn-bar" role="alert" hidden>Lost connection to the game server. Retrying.</div>
+
+  <aside class="case-tab" aria-label="Timer and score">
+    <p class="case-session" id="case-session">Session 1</p>
+    <p class="timer" id="timer">--:--</p>
+    <p class="score" id="score"></p>
+  </aside>
+
+  <header class="file-head">
+    <p class="file-label" id="team-name">Team</p>
+    <h1 id="round-title">Waiting for the host to start</h1>
+  </header>
+
+  <aside id="hint-card" class="hint-card" aria-label="Hints" hidden>
+    <button type="button" id="hint-toggle" class="hint-toggle" aria-expanded="true" aria-controls="hint-list"></button>
+    <ol id="hint-list" class="hint-list"></ol>
+  </aside>
+
+  <main class="desk">
+    <section id="transcript" class="transcript" aria-label="Chat with VaultBot">
+      <p id="chat-empty" class="chat-empty"></p>
+      <ol id="chat" class="chat" aria-live="polite"></ol>
+    </section>
+
+    <form id="send-form" class="composer">
+      <label for="message" class="visually-hidden">Message to VaultBot</label>
+      <textarea id="message" maxlength="500" rows="2" placeholder="Write to VaultBot. Enter sends, Shift+Enter adds a line."></textarea>
+      <button type="submit" id="send-btn">Send</button>
+      <p id="send-note" class="note" role="status"></p>
+    </form>
+
+    <form id="guess-form" class="checker">
+      <label for="code">Vault code</label>
+      <input id="code" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000">
+      <button type="submit" id="guess-btn">Try this code</button>
+      <p id="guess-note" class="note" role="status"></p>
+    </form>
+  </main>
+
+  <div id="stamp" class="stamp" aria-hidden="true" hidden></div>
+
+  <div id="overlay" class="overlay" hidden>
+    <div class="overlay-card" role="status">
+      <p class="overlay-stamp" id="overlay-stamp"></p>
+      <p id="overlay-text"></p>
+    </div>
+  </div>
+
+  <button type="button" id="host-btn" class="host-btn">Host</button>
+
+  <dialog id="host-dialog" aria-labelledby="host-title">
+    <h2 id="host-title">Host controls</h2>
+    <p id="host-note" class="note" role="status"></p>
+    <div id="host-body"></div>
+    <div class="host-foot">
+      <a href="/results" target="_blank" rel="noopener">Open the results page</a>
+      <button type="button" id="host-close" class="quiet">Close</button>
+    </div>
+  </dialog>
+
+  <script src="/static/team.js" type="module"></script>
+</body>
+</html>
