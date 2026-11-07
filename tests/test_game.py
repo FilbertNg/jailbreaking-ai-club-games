@@ -249,3 +249,134 @@ def test_next_hint_stops_at_last(game):
         game.next_hint()
     with pytest.raises(GameRuleError):
         game.next_hint()
+
+
+from jailbreak.game import ChatContext  # noqa: E402
+
+NAMES = {"a": "Kopi", "b": "Teh"}
+
+
+def test_new_session_from_lobby_only_renames(game, results):
+    game.new_session(NAMES)
+    assert game.session == 1
+    assert game.teams["a"].name == "Kopi"
+    assert results == []
+
+
+def test_new_session_after_finish_starts_fresh(game, results):
+    game.start()
+    for _ in range(3):
+        crack(game, "a")
+    game.new_session(NAMES)
+    assert game.session == 2
+    assert game.phase == "lobby"
+    assert game.teams["b"].name == "Teh"
+    assert game.teams["a"].rounds_cleared == 0
+    assert game.teams["a"].codes == []
+    assert len(results) == 1
+
+
+def test_new_session_mid_game_saves_stopped_early(game, results):
+    game.start()
+    crack(game, "b")
+    game.new_session(NAMES)
+    assert game.session == 2
+    assert len(results) == 1
+    assert results[0]["how_ended"] == "stopped_early"
+    assert results[0]["winner"] is None
+    assert results[0]["teams"]["b"]["rounds_cleared"] == 1
+
+
+def test_new_session_needs_both_names(game):
+    with pytest.raises(GameRuleError):
+        game.new_session({"a": "Kopi", "b": "  "})
+    with pytest.raises(GameRuleError):
+        game.new_session({"a": "x" * 25, "b": "Teh"})
+
+
+def test_rename_only_in_lobby(game):
+    game.rename(NAMES)
+    assert game.teams["a"].name == "Kopi"
+    game.start()
+    with pytest.raises(GameRuleError):
+        game.rename({"a": "New", "b": "Names"})
+
+
+def test_chat_context_and_exchange(game):
+    game.start()
+    ctx = game.chat_context("a")
+    assert isinstance(ctx, ChatContext)
+    assert ctx.code == game.code_for("a")
+    assert ctx.round.name == "Round 1"
+    assert game.add_exchange("a", ctx.key, "hello", "hi there", False) is True
+    assert game.teams["a"].chat == [
+        {"role": "you", "text": "hello", "censored": False},
+        {"role": "guard", "text": "hi there", "censored": False},
+    ]
+
+
+def test_exchange_dropped_when_round_changed(game):
+    game.start()
+    ctx = game.chat_context("a")
+    crack(game, "a")
+    assert game.add_exchange("a", ctx.key, "hello", "late reply", False) is False
+    assert game.teams["a"].chat == []
+
+
+def test_chat_context_rejected_outside_play(game):
+    with pytest.raises(GameRuleError):
+        game.chat_context("a")
+
+
+def test_save_and_load_round_trip(game, cfg, clock, saved):
+    game.start()
+    crack(game, "a")
+    game.new_session(NAMES)
+    game.start()
+    loaded = Game.from_dict(cfg, saved[-1], now=clock)
+    assert loaded.session == 2
+    assert loaded.phase == "running"
+    assert loaded.teams["a"].name == "Kopi"
+    assert loaded.code_for("a") == game.code_for("a")
+
+
+def test_public_state_hides_codes(game, clock):
+    game.start()
+    clock.advance(200)
+    state = game.public_state("a")
+    text = repr(state)
+    for team in TEAMS:
+        for code in game.teams[team].codes:
+            assert code not in text
+    assert state["seconds_left"] == 400
+    assert state["round_number"] == 1
+    assert state["round_name"] == "Round 1"
+    assert state["hints"] == ["hint one"]
+    assert state["hints_total"] == 3
+    assert state["team_names"] == {"a": "Team A", "b": "Team B"}
+
+
+def test_public_state_shows_cooldown(game, clock):
+    game.start()
+    game.guess("a", WRONG)
+    clock.advance(2.5)
+    assert game.public_state("a")["cooldown_s"] == 8
+    assert game.public_state("b")["cooldown_s"] == 0
+
+
+def test_public_state_in_tiebreaker(game, clock):
+    make_tie(game, clock)
+    game.start_tiebreaker()
+    state = game.public_state("b")
+    assert state["round_number"] is None
+    assert state["round_name"] == "Tiebreaker"
+    assert state["seconds_left"] == 180
+
+
+def test_live_standing(game):
+    game.start()
+    crack(game, "b")
+    live = game.live_standing()
+    assert live["teams"]["b"] == {"name": "Team B", "rounds_cleared": 1}
+    assert live["phase"] == "running"
+    assert "codes" not in repr(live)

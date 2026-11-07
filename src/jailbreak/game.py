@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import secrets
 import time
 from collections.abc import Callable
@@ -27,6 +28,24 @@ class TeamState:
     wrong_guesses: int = 0
     tiebreak_wrong: int = 0
     cooldown_until: float = 0.0
+
+
+@dataclass(frozen=True)
+class ChatContext:
+    key: tuple
+    round: RoundConfig
+    code: str
+    history: list[dict]
+
+
+def _clean_names(names: dict) -> dict[str, str]:
+    clean = {}
+    for t in TEAMS:
+        name = str(names.get(t) or "").strip()
+        if not 1 <= len(name) <= 24:
+            raise GameRuleError("Each team name needs 1 to 24 characters.")
+        clean[t] = name
+    return clean
 
 
 class Game:
@@ -165,6 +184,119 @@ class Game:
         elapsed_min = (self._now() - self.started_at) / 60
         by_time = sum(1 for m in self.cfg.hint_minutes if elapsed_min >= m)
         return min(len(self.cfg.hints), by_time + self.extra_hints)
+
+    @classmethod
+    def from_dict(
+        cls,
+        cfg: GameConfig,
+        data: dict,
+        now: Callable[[], float] = time.time,
+        on_change: Callable[[dict], None] | None = None,
+        on_result: Callable[[dict], None] | None = None,
+    ) -> Game:
+        game = cls(cfg, now=now, on_change=on_change, on_result=on_result)
+        game.session = data["session"]
+        game.phase = data["phase"]
+        game.started_at = data["started_at"]
+        game.ends_at = data["ends_at"]
+        game.tiebreak_ends_at = data["tiebreak_ends_at"]
+        game.extra_hints = data["extra_hints"]
+        game.winner = data["winner"]
+        game.how_ended = data["how_ended"]
+        game.teams = {t: TeamState(**data["teams"][t]) for t in TEAMS}
+        return game
+
+    def new_session(self, names: dict) -> None:
+        clean = _clean_names(names)
+        self.tick()
+        if self.phase == "lobby":
+            for t in TEAMS:
+                self.teams[t].name = clean[t]
+            self._changed()
+            return
+        if self.phase != "finished":
+            self._finish(None, "stopped_early")
+        self.session += 1
+        self._reset_session(clean)
+        self._changed()
+
+    def rename(self, names: dict) -> None:
+        clean = _clean_names(names)
+        self.tick()
+        if self.phase != "lobby":
+            raise GameRuleError("Team names can only change before the session starts.")
+        for t in TEAMS:
+            self.teams[t].name = clean[t]
+        self._changed()
+
+    def chat_context(self, team: str) -> ChatContext:
+        self.tick()
+        self._require_active()
+        return ChatContext(
+            key=self._round_key(team),
+            round=self.current_round(team),
+            code=self.code_for(team),
+            history=list(self.teams[team].chat),
+        )
+
+    def add_exchange(self, team: str, key: tuple, message: str, reply: str, censored: bool) -> bool:
+        self.tick()
+        if self.phase not in ACTIVE_PHASES or key != self._round_key(team):
+            return False
+        self.teams[team].chat.extend([
+            {"role": "you", "text": message, "censored": False},
+            {"role": "guard", "text": reply, "censored": censored},
+        ])
+        self._changed()
+        return True
+
+    def public_state(self, team: str) -> dict:
+        self.tick()
+        t = self.teams[team]
+        now = self._now()
+        in_tiebreak = self.phase in ("tiebreaker", "tiebreak_over")
+        cooldown = t.cooldown_until - now if self.phase in ACTIVE_PHASES else 0
+        return {
+            "session": self.session,
+            "phase": self.phase,
+            "team": team,
+            "team_names": {k: v.name for k, v in self.teams.items()},
+            "seconds_left": self._seconds_left(),
+            "rounds_total": len(self.cfg.rounds),
+            "rounds_cleared": {k: v.rounds_cleared for k, v in self.teams.items()},
+            "round_number": None if in_tiebreak else t.round_index + 1,
+            "round_name": self.current_round(team).name,
+            "chat": [dict(m) for m in t.chat],
+            "hints": list(self.cfg.hints[: self.hints_revealed()]),
+            "hints_total": len(self.cfg.hints),
+            "cooldown_s": max(0, math.ceil(cooldown)),
+            "winner": self.winner,
+            "how_ended": self.how_ended,
+            "wrong_guesses": {k: v.wrong_guesses for k, v in self.teams.items()},
+            "tiebreak_wrong": {k: v.tiebreak_wrong for k, v in self.teams.items()},
+        }
+
+    def live_standing(self) -> dict:
+        self.tick()
+        return {
+            "session": self.session,
+            "phase": self.phase,
+            "rounds_total": len(self.cfg.rounds),
+            "seconds_left": self._seconds_left(),
+            "winner": self.winner,
+            "how_ended": self.how_ended,
+            "teams": {k: {"name": v.name, "rounds_cleared": v.rounds_cleared} for k, v in self.teams.items()},
+        }
+
+    def _seconds_left(self) -> int | None:
+        if self.phase == "running":
+            return max(0, math.ceil(self.ends_at - self._now()))
+        if self.phase == "tiebreaker":
+            return max(0, math.ceil(self.tiebreak_ends_at - self._now()))
+        return None
+
+    def _round_key(self, team: str) -> tuple:
+        return (self.session, self.phase, self.teams[team].round_index)
 
     def _require_active(self) -> None:
         if self.phase not in ACTIVE_PHASES:
