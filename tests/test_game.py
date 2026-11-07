@@ -148,3 +148,104 @@ def test_every_change_is_saved(game, saved):
     game.start()
     assert saved[-1]["phase"] == "running"
     assert saved[-1]["teams"]["a"]["codes"] == game.teams["a"].codes
+
+
+def make_tie(game, clock):
+    game.start()
+    clock.advance(600)
+    game.tick()
+    assert game.phase == "tie"
+
+
+def test_tiebreaker_gives_new_codes_and_clock(game, clock):
+    make_tie(game, clock)
+    game.teams["a"].chat.append({"role": "you", "text": "hi", "censored": False})
+    game.start_tiebreaker()
+    assert game.phase == "tiebreaker"
+    assert game.tiebreak_ends_at == clock() + 180
+    assert game.code_for("a") == game.teams["a"].tiebreak_code
+    assert game.code_for("a") != game.code_for("b")
+    assert game.teams["a"].chat == []
+    assert game.current_round("a").name == "Tiebreaker"
+
+
+def test_tiebreaker_only_after_tie(game):
+    game.start()
+    with pytest.raises(GameRuleError):
+        game.start_tiebreaker()
+
+
+def test_first_correct_tiebreak_code_wins(game, clock, results):
+    make_tie(game, clock)
+    game.start_tiebreaker()
+    game.guess("a", WRONG)
+    assert game.teams["a"].tiebreak_wrong == 1
+    assert game.teams["a"].wrong_guesses == 0
+    crack(game, "b")
+    assert (game.phase, game.winner, game.how_ended) == ("finished", "b", "tiebreaker")
+    assert len(results) == 1
+
+
+def test_tiebreak_timeout_then_award(game, clock, results):
+    make_tie(game, clock)
+    game.start_tiebreaker()
+    clock.advance(180)
+    game.tick()
+    assert game.phase == "tiebreak_over"
+    game.award("a")
+    assert (game.phase, game.winner, game.how_ended) == ("finished", "a", "host_award")
+    assert results[-1]["how_ended"] == "host_award"
+
+
+def test_award_straight_from_tie(game, clock):
+    make_tie(game, clock)
+    game.award("b")
+    assert game.winner == "b"
+
+
+def test_award_not_allowed_while_running(game):
+    game.start()
+    with pytest.raises(GameRuleError):
+        game.award("a")
+
+
+def test_skip_counts_as_clear(game, clock):
+    game.start()
+    clock.advance(45)
+    game.skip_round("a")
+    assert game.teams["a"].rounds_cleared == 1
+    assert game.teams["a"].clear_times == [45.0]
+
+
+def test_skip_only_in_main_game(game, clock):
+    make_tie(game, clock)
+    game.start_tiebreaker()
+    with pytest.raises(GameRuleError):
+        game.skip_round("a")
+
+
+def test_hints_unlock_by_time(game, clock):
+    game.start()
+    assert game.hints_revealed() == 0
+    clock.advance(180)
+    assert game.hints_revealed() == 1
+    clock.advance(180)
+    assert game.hints_revealed() == 2
+    clock.advance(120)
+    assert game.hints_revealed() == 3
+
+
+def test_next_hint_adds_one_now(game, clock):
+    game.start()
+    game.next_hint()
+    assert game.hints_revealed() == 1
+    clock.advance(180)
+    assert game.hints_revealed() == 2
+
+
+def test_next_hint_stops_at_last(game):
+    game.start()
+    for _ in range(3):
+        game.next_hint()
+    with pytest.raises(GameRuleError):
+        game.next_hint()

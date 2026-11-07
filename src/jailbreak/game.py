@@ -124,6 +124,48 @@ class Game:
             "teams": {t: asdict(s) for t, s in self.teams.items()},
         }
 
+    def start_tiebreaker(self) -> None:
+        self.tick()
+        if self.phase != "tie":
+            raise GameRuleError("A tiebreaker can only start after a tie.")
+        a, b = self._new_code_pair()
+        self.teams["a"].tiebreak_code = a
+        self.teams["b"].tiebreak_code = b
+        for t in self.teams.values():
+            t.chat = []
+            t.cooldown_until = 0.0
+        self.tiebreak_ends_at = self._now() + self.cfg.tiebreaker_minutes * 60
+        self.phase = "tiebreaker"
+        self._changed()
+
+    def award(self, team: str) -> None:
+        self.tick()
+        if self.phase not in ("tie", "tiebreak_over"):
+            raise GameRuleError("Award the win only after a tie, or after a tiebreaker with no winner.")
+        self._finish(team, "host_award")
+
+    def skip_round(self, team: str) -> None:
+        self.tick()
+        if self.phase != "running":
+            raise GameRuleError("Skip works only during the main game.")
+        self._clear(team)
+
+    def next_hint(self) -> None:
+        self.tick()
+        if self.phase != "running":
+            raise GameRuleError("Hints are given only during the main game.")
+        if self.hints_revealed() >= len(self.cfg.hints):
+            raise GameRuleError("All hints are already showing.")
+        self.extra_hints += 1
+        self._changed()
+
+    def hints_revealed(self) -> int:
+        if self.started_at is None:
+            return 0
+        elapsed_min = (self._now() - self.started_at) / 60
+        by_time = sum(1 for m in self.cfg.hint_minutes if elapsed_min >= m)
+        return min(len(self.cfg.hints), by_time + self.extra_hints)
+
     def _require_active(self) -> None:
         if self.phase not in ACTIVE_PHASES:
             raise GameRuleError("The vault is closed right now. Wait for the host.")
