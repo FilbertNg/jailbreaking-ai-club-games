@@ -1,1 +1,23 @@
-<!doctype html><title>placeholder</title>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Results · Break the AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Public+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/case.css">
+</head>
+<body>
+  <div id="conn-bar" class="conn-bar" role="alert" hidden>Could not reach the game server. Retrying.</div>
+  <main class="plain-page">
+    <h1>Results</h1>
+    <p class="lead">Every session played today, newest first. This page updates by itself.</p>
+    <p id="status" class="note" role="status">Opening the archive...</p>
+    <ol id="archive" class="archive" aria-label="Sessions"></ol>
+  </main>
+  <script src="/static/results.js" type="module"></script>
+</body>
+</html>
