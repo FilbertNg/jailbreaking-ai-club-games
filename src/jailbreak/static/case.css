@@ -121,6 +121,19 @@ input:disabled, textarea:disabled { background: var(--folder); }
 .hint-toggle:hover:not(:disabled) { background: transparent; text-decoration: underline; }
 .hint-list { margin: 0; padding-left: 1.4em; }
 .hint-list li + li { margin-top: 6px; }
+.notes-title { margin: 8px 0 4px; font-size: 0.85rem; font-weight: 700; }
+.reveal-list { list-style: none; margin: 0; padding: 0; font-family: var(--font-record); font-size: 0.95rem; }
+.reveal-list li + li { margin-top: 4px; }
+.overlay-card .reveal-list { text-align: left; }
+
+.notice {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  font-weight: 600;
+  background: var(--folder);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+}
 
 .desk { max-width: 760px; margin: 0 auto; display: grid; gap: 12px; }
 
@@ -206,7 +219,7 @@ input:disabled, textarea:disabled { background: var(--folder); }
   border-radius: var(--radius);
   transform: rotate(-4deg);
 }
-.overlay-card p:last-child { margin: 0; font-size: 1.1rem; }
+#overlay-text { margin: 0; font-size: 1.1rem; }
 
 .host-btn {
   position: relative; z-index: 15;
@@ -306,6 +319,7 @@ dialog h2 { margin: 0 0 4px; font-size: 1.3rem; }
 .side.won { font-weight: 800; }
 .side .vaults { font-family: var(--font-record); font-variant-numeric: tabular-nums; }
 .how { grid-column: 2 / -1; margin: 0; color: var(--ink-soft); }
+.codes { grid-column: 2 / -1; margin: 0; font-family: var(--font-record); font-size: 0.9rem; }
 .verdict {
   margin: 0;
   padding: 2px 10px;
@@ -320,6 +334,6 @@ dialog h2 { margin: 0 0 4px; font-size: 1.3rem; }
 
 @media (max-width: 640px) {
   .entry { grid-template-columns: 1fr; gap: 10px; }
-  .how { grid-column: 1 / -1; }
+  .how, .codes { grid-column: 1 / -1; }
   .verdict { justify-self: start; white-space: normal; }
 }

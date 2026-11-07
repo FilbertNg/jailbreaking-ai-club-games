@@ -72,6 +72,10 @@ class Game:
         self.extra_hints = 0
         self.winner: str | None = None
         self.how_ended: str | None = None
+        self.reveals: list[dict] = []
+
+    def team_done(self, team: str) -> bool:
+        return self.teams[team].rounds_cleared >= len(self.cfg.rounds)
 
     def code_for(self, team: str) -> str:
         t = self.teams[team]
@@ -103,12 +107,13 @@ class Game:
         if self.phase == "running" and now >= self.ends_at:
             self._time_up()
         elif self.phase == "tiebreaker" and now >= self.tiebreak_ends_at:
+            self._reveal_unsolved()
             self.phase = "tiebreak_over"
             self._changed()
 
     def guess(self, team: str, code: str) -> dict:
         self.tick()
-        self._require_active()
+        self._require_playing(team)
         code = code.strip()
         if len(code) != 4 or not code.isdigit():
             return {"result": "invalid", "cooldown_s": 0}
@@ -118,6 +123,8 @@ class Game:
             return {"result": "cooldown", "cooldown_s": round(t.cooldown_until - now, 1)}
         if code == self.code_for(team):
             if self.phase == "tiebreaker":
+                self._reveal(team, None, "cracked")
+                self._reveal_unsolved()
                 self._finish(team, "tiebreaker")
             else:
                 self._clear(team)
@@ -140,6 +147,7 @@ class Game:
             "extra_hints": self.extra_hints,
             "winner": self.winner,
             "how_ended": self.how_ended,
+            "reveals": [dict(r) for r in self.reveals],
             "teams": {t: asdict(s) for t, s in self.teams.items()},
         }
 
@@ -167,7 +175,9 @@ class Game:
         self.tick()
         if self.phase != "running":
             raise GameRuleError("Skip works only during the main game.")
-        self._clear(team)
+        if self.team_done(team):
+            raise GameRuleError(f"{self.teams[team].name} has already cracked every vault.")
+        self._clear(team, "skipped")
 
     def next_hint(self) -> None:
         self.tick()
@@ -203,6 +213,7 @@ class Game:
         game.extra_hints = data["extra_hints"]
         game.winner = data["winner"]
         game.how_ended = data["how_ended"]
+        game.reveals = list(data.get("reveals", []))
         game.teams = {t: TeamState(**data["teams"][t]) for t in TEAMS}
         return game
 
@@ -215,7 +226,11 @@ class Game:
             self._changed()
             return
         if self.phase != "finished":
-            self._finish(None, "stopped_early")
+            self._reveal_unsolved()
+            if self.winner:
+                self._finish(self.winner, self.how_ended)
+            else:
+                self._finish(None, "stopped_early")
         self.session += 1
         self._reset_session(clean)
         self._changed()
@@ -231,7 +246,7 @@ class Game:
 
     def chat_context(self, team: str) -> ChatContext:
         self.tick()
-        self._require_active()
+        self._require_playing(team)
         return ChatContext(
             key=self._round_key(team),
             round=self.current_round(team),
@@ -272,6 +287,8 @@ class Game:
             "cooldown_s": max(0, math.ceil(cooldown)),
             "winner": self.winner,
             "how_ended": self.how_ended,
+            "team_done": {k: self.team_done(k) for k in TEAMS},
+            "reveals": [dict(r) for r in self.reveals],
             "wrong_guesses": {k: v.wrong_guesses for k, v in self.teams.items()},
             "tiebreak_wrong": {k: v.tiebreak_wrong for k, v in self.teams.items()},
         }
@@ -298,22 +315,50 @@ class Game:
     def _round_key(self, team: str) -> tuple:
         return (self.session, self.phase, self.teams[team].round_index)
 
-    def _require_active(self) -> None:
+    def _require_playing(self, team: str) -> None:
         if self.phase not in ACTIVE_PHASES:
             raise GameRuleError("The vault is closed right now. Wait for the host.")
+        if self.phase == "running" and self.team_done(team):
+            raise GameRuleError("Your team has cracked every vault. Wait for the timer to end.")
 
-    def _clear(self, team: str) -> None:
+    def _clear(self, team: str, how: str = "cracked") -> None:
         t = self.teams[team]
+        self._reveal(team, t.rounds_cleared + 1, how)
         t.clear_times.append(round(self._now() - self.started_at, 1))
         t.rounds_cleared += 1
         t.chat = []
-        if t.rounds_cleared >= len(self.cfg.rounds):
-            self._finish(team, "cracked_all")
-        else:
+        if not self.team_done(team):
             t.round_index += 1
             self._changed()
+            return
+        if self.winner is None:
+            # First team through every vault wins; the other team keeps playing until time is up.
+            self.winner = team
+            self.how_ended = "cracked_all"
+        if all(self.team_done(k) for k in TEAMS):
+            self._finish(self.winner, self.how_ended)
+        else:
+            self._changed()
+
+    def _reveal(self, team: str, vault: int | None, how: str) -> None:
+        if any(r["team"] == team and r["vault"] == vault for r in self.reveals):
+            return
+        t = self.teams[team]
+        code = t.tiebreak_code if vault is None else t.codes[vault - 1]
+        self.reveals.append({"team": team, "vault": vault, "code": code, "how": how})
+
+    def _reveal_unsolved(self) -> None:
+        for team, t in self.teams.items():
+            for vault in range(t.rounds_cleared + 1, len(t.codes) + 1):
+                self._reveal(team, vault, "unsolved")
+            if t.tiebreak_code:
+                self._reveal(team, None, "unsolved")
 
     def _time_up(self) -> None:
+        self._reveal_unsolved()
+        if self.winner:
+            self._finish(self.winner, self.how_ended)
+            return
         a, b = self.teams["a"], self.teams["b"]
         if a.rounds_cleared != b.rounds_cleared:
             leader = "a" if a.rounds_cleared > b.rounds_cleared else "b"
@@ -340,6 +385,7 @@ class Game:
             "rounds_total": len(self.cfg.rounds),
             "winner": self.winner,
             "how_ended": self.how_ended,
+            "reveals": [dict(r) for r in self.reveals],
             "teams": {
                 t: {
                     "name": s.name,

@@ -22,11 +22,17 @@
   <header class="file-head">
     <p class="file-label" id="team-name">Team</p>
     <h1 id="round-title">Waiting for the host to start</h1>
+    <p id="notice" class="notice" role="status" hidden></p>
   </header>
 
-  <aside id="hint-card" class="hint-card" aria-label="Hints" hidden>
-    <button type="button" id="hint-toggle" class="hint-toggle" aria-expanded="true" aria-controls="hint-list"></button>
-    <ol id="hint-list" class="hint-list"></ol>
+  <aside id="hint-card" class="hint-card" aria-label="Hints and revealed codes" hidden>
+    <button type="button" id="hint-toggle" class="hint-toggle" aria-expanded="true" aria-controls="notes-body"></button>
+    <div id="notes-body">
+      <h2 id="hint-title" class="notes-title" hidden>Hints</h2>
+      <ol id="hint-list" class="hint-list"></ol>
+      <h2 id="reveal-title" class="notes-title" hidden>Revealed codes</h2>
+      <ul id="reveal-list" class="reveal-list"></ul>
+    </div>
   </aside>
 
   <main class="desk">
@@ -56,6 +62,8 @@
     <div class="overlay-card" role="status">
       <p class="overlay-stamp" id="overlay-stamp"></p>
       <p id="overlay-text"></p>
+      <h2 id="overlay-codes-title" class="notes-title" hidden>Codes nobody cracked</h2>
+      <ul id="overlay-codes" class="reveal-list"></ul>
     </div>
   </div>
 

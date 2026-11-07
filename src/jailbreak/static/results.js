@@ -42,6 +42,21 @@ function sides(teams, total, winner) {
     el("span", "vaults", `${teams[t].rounds_cleared}/${total} vaults`))));
 }
 
+function codeLines(r) {
+  const reveals = r.reveals || [];
+  const order = (v) => (v === null ? 99 : v);
+  return ["a", "b"].flatMap((t) => {
+    const mine = reveals.filter((x) => x.team === t).sort((x, y) => order(x.vault) - order(y.vault));
+    if (!mine.length) return [];
+    const items = mine.map((x) => {
+      const label = x.vault === null ? `tiebreaker ${x.code}` : x.code;
+      const how = x.how === "skipped" ? " (skipped)" : x.how === "unsolved" ? " (not cracked)" : "";
+      return label + how;
+    });
+    return [el("p", "codes", `${r.teams[t].name} codes: ${items.join(", ")}`)];
+  });
+}
+
 function recordEntry(r) {
   const ended = new Date(r.ended_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const verdict = r.winner
@@ -51,7 +66,8 @@ function recordEntry(r) {
     el("div", "", el("p", "entry-num", `Session ${r.session}`), el("p", "entry-when", `Ended ${ended}`)),
     sides(r.teams, r.rounds_total, r.winner),
     verdict,
-    el("p", "how", howText(r)));
+    el("p", "how", howText(r)),
+    ...codeLines(r));
 }
 
 function liveEntry(c) {

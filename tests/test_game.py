@@ -92,17 +92,36 @@ def test_correct_guess_moves_to_next_round(game, clock):
     assert game.current_round("a").name == "Round 2"
 
 
-def test_clearing_last_round_wins_at_once(game, results):
+def test_clearing_last_round_wins_but_other_team_keeps_playing(game, clock, results):
     game.start()
     for _ in range(3):
         crack(game, "a")
-    assert game.phase == "finished"
+    assert game.phase == "running"
     assert game.winner == "a"
     assert game.how_ended == "cracked_all"
+    assert results == []
+    assert crack(game, "b")["result"] == "correct"
+    with pytest.raises(GameRuleError):
+        game.guess("a", WRONG)
+    with pytest.raises(GameRuleError):
+        game.chat_context("a")
+    clock.advance(600)
+    game.tick()
+    assert (game.phase, game.winner, game.how_ended) == ("finished", "a", "cracked_all")
     assert len(results) == 1
-    assert results[0]["winner"] == "a"
     assert results[0]["teams"]["a"]["rounds_cleared"] == 3
+    assert results[0]["teams"]["b"]["rounds_cleared"] == 1
     assert "codes" not in results[0]["teams"]["a"]
+
+
+def test_session_ends_when_both_teams_crack_everything(game, results):
+    game.start()
+    for _ in range(3):
+        crack(game, "a")
+    for _ in range(3):
+        crack(game, "b")
+    assert (game.phase, game.winner) == ("finished", "a")
+    assert len(results) == 1
 
 
 def test_time_up_more_rounds_wins(game, clock):
@@ -380,3 +399,105 @@ def test_live_standing(game):
     assert live["teams"]["b"] == {"name": "Team B", "rounds_cleared": 1}
     assert live["phase"] == "running"
     assert "codes" not in repr(live)
+
+
+def revealed(game):
+    return {(r["team"], r["vault"]): (r["code"], r["how"]) for r in game.reveals}
+
+
+def test_crack_reveals_that_code_to_both_teams(game):
+    game.start()
+    first = game.code_for("a")
+    crack(game, "a")
+    assert revealed(game) == {("a", 1): (first, "cracked")}
+    for team in TEAMS:
+        state = game.public_state(team)
+        assert state["reveals"] == [{"team": "a", "vault": 1, "code": first, "how": "cracked"}]
+        text = repr(state)
+        for code in game.teams["a"].codes[1:] + game.teams["b"].codes:
+            assert code not in text
+
+
+def test_skip_reveals_code_as_skipped(game):
+    game.start()
+    code = game.code_for("b")
+    game.skip_round("b")
+    assert revealed(game) == {("b", 1): (code, "skipped")}
+
+
+def test_skip_rejected_for_team_that_cracked_everything(game):
+    game.start()
+    for _ in range(3):
+        crack(game, "a")
+    with pytest.raises(GameRuleError):
+        game.skip_round("a")
+
+
+def test_time_up_reveals_every_uncracked_code(game, clock, results):
+    game.start()
+    crack(game, "a")
+    a_codes, b_codes = list(game.teams["a"].codes), list(game.teams["b"].codes)
+    clock.advance(600)
+    game.tick()
+    got = revealed(game)
+    assert got[("a", 1)] == (a_codes[0], "cracked")
+    assert got[("a", 2)] == (a_codes[1], "unsolved")
+    assert got[("a", 3)] == (a_codes[2], "unsolved")
+    for v in (1, 2, 3):
+        assert got[("b", v)] == (b_codes[v - 1], "unsolved")
+    assert results[0]["reveals"] == game.reveals
+
+
+def test_tie_reveals_main_codes_then_tiebreak_codes(game, clock):
+    make_tie(game, clock)
+    assert len(game.reveals) == 6
+    game.start_tiebreaker()
+    a_tb, b_tb = game.code_for("a"), game.code_for("b")
+    crack(game, "b")
+    got = revealed(game)
+    assert got[("b", None)] == (b_tb, "cracked")
+    assert got[("a", None)] == (a_tb, "unsolved")
+
+
+def test_tiebreak_timeout_reveals_tiebreak_codes(game, clock):
+    make_tie(game, clock)
+    game.start_tiebreaker()
+    clock.advance(180)
+    game.tick()
+    got = revealed(game)
+    assert got[("a", None)][1] == "unsolved"
+    assert got[("b", None)][1] == "unsolved"
+
+
+def test_new_session_keeps_a_winner_decided_mid_game(game, results):
+    game.start()
+    for _ in range(3):
+        crack(game, "a")
+    game.new_session(NAMES)
+    assert results[0]["winner"] == "a"
+    assert results[0]["how_ended"] == "cracked_all"
+    assert game.reveals == []
+
+
+def test_new_session_mid_game_reveals_unsolved_in_results(game, results):
+    game.start()
+    game.new_session(NAMES)
+    assert {r["how"] for r in results[0]["reveals"]} == {"unsolved"}
+    assert len(results[0]["reveals"]) == 6
+
+
+def test_load_state_saved_before_reveals_existed(game, cfg, clock, saved):
+    game.start()
+    data = dict(saved[-1])
+    del data["reveals"]
+    assert Game.from_dict(cfg, data, now=clock).reveals == []
+
+
+def test_public_state_marks_team_done(game):
+    game.start()
+    for _ in range(3):
+        crack(game, "a")
+    state = game.public_state("b")
+    assert state["team_done"] == {"a": True, "b": False}
+    assert state["winner"] == "a"
+    assert state["phase"] == "running"

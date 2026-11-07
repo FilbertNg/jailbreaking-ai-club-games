@@ -3,8 +3,10 @@ const $ = (id) => document.getElementById(id);
 
 const els = {
   conn: $("conn-bar"), session: $("case-session"), timer: $("timer"), score: $("score"),
-  teamName: $("team-name"), title: $("round-title"),
-  hintCard: $("hint-card"), hintToggle: $("hint-toggle"), hintList: $("hint-list"),
+  teamName: $("team-name"), title: $("round-title"), notice: $("notice"),
+  hintCard: $("hint-card"), hintToggle: $("hint-toggle"), notesBody: $("notes-body"),
+  hintTitle: $("hint-title"), hintList: $("hint-list"), revealTitle: $("reveal-title"), revealList: $("reveal-list"),
+  overlayCodesTitle: $("overlay-codes-title"), overlayCodes: $("overlay-codes"),
   transcript: $("transcript"), chat: $("chat"), chatEmpty: $("chat-empty"),
   sendForm: $("send-form"), message: $("message"), sendBtn: $("send-btn"), sendNote: $("send-note"),
   guessForm: $("guess-form"), code: $("code"), guessBtn: $("guess-btn"), guessNote: $("guess-note"),
@@ -20,6 +22,13 @@ const HOW_ENDED = {
   tiebreaker: () => "Won the tiebreaker.",
   host_award: () => "Awarded by the host.",
 };
+
+const REVEAL_HOW = { cracked: "cracked", skipped: "skipped by the host", unsolved: "not cracked" };
+
+function revealText(r, names) {
+  const vault = r.vault === null ? "Tiebreaker" : `Vault ${r.vault}`;
+  return `${names[r.team]} · ${vault} · ${r.code} (${REVEAL_HOW[r.how]})`;
+}
 
 let state = null;
 let chatKey = "";
@@ -110,6 +119,7 @@ function render(s) {
   els.timer.classList.toggle("low", s.seconds_left != null && s.seconds_left <= 60);
   els.score.textContent = `${names.a} ${s.rounds_cleared.a}/${s.rounds_total} · ${names.b} ${s.rounds_cleared.b}/${s.rounds_total}`;
   renderHints(s, prev);
+  renderNotice(s);
   renderChat(s);
   renderControls(s);
   renderOverlay(s);
@@ -117,22 +127,38 @@ function render(s) {
 }
 
 function renderHints(s, prev) {
-  const count = s.hints.length;
+  const count = s.hints.length + s.reveals.length;
   els.hintCard.hidden = count === 0;
   if (count === 0) return;
-  const before = prev && prev.session === s.session ? prev.hints.length : count;
-  if (els.hintList.children.length !== count) {
+  const before = prev && prev.session === s.session ? prev.hints.length + prev.reveals.length : count;
+  if (els.hintList.children.length !== s.hints.length) {
     els.hintList.replaceChildren(...s.hints.map((h) => el("li", {}, h)));
   }
+  if (els.revealList.children.length !== s.reveals.length) {
+    els.revealList.replaceChildren(...s.reveals.map((r) => el("li", {}, revealText(r, s.team_names))));
+  }
+  els.hintTitle.hidden = els.hintList.hidden = s.hints.length === 0;
+  els.revealTitle.hidden = els.revealList.hidden = s.reveals.length === 0;
   if (count > before) {
     hintsOpen = true;
     els.hintCard.classList.remove("arrive");
     void els.hintCard.offsetWidth;
     els.hintCard.classList.add("arrive");
   }
-  els.hintList.hidden = !hintsOpen;
+  els.notesBody.hidden = !hintsOpen;
   els.hintToggle.setAttribute("aria-expanded", String(hintsOpen));
-  els.hintToggle.textContent = `Hints: ${count} of ${s.hints_total} (${hintsOpen ? "hide" : "show"})`;
+  const parts = [];
+  if (s.hints.length) parts.push(`${s.hints.length} of ${s.hints_total} hints`);
+  if (s.reveals.length) parts.push(`${s.reveals.length} ${s.reveals.length === 1 ? "code" : "codes"}`);
+  els.hintToggle.textContent = `${parts.join(", ")} (${hintsOpen ? "hide" : "show"})`;
+}
+
+function renderNotice(s) {
+  const show = s.phase === "running" && s.winner && s.winner !== team;
+  els.notice.hidden = !show;
+  if (show) {
+    els.notice.textContent = `${s.team_names[s.winner]} cracked all ${s.rounds_total} vaults and won. Keep playing until the timer ends to see how far you get.`;
+  }
 }
 
 function emptyText(s) {
@@ -167,7 +193,8 @@ function renderChat(s) {
 }
 
 function renderControls(s) {
-  const active = s.phase === "running" || s.phase === "tiebreaker";
+  const doneEarly = s.phase === "running" && s.team_done[team];
+  const active = (s.phase === "running" || s.phase === "tiebreaker") && !doneEarly;
   els.message.disabled = !active;
   els.sendBtn.disabled = !active || sending || s.busy;
   els.code.disabled = !active;
@@ -179,7 +206,11 @@ function renderControls(s) {
 function renderOverlay(s) {
   let stamp = "";
   let text = "";
-  if (s.phase === "finished" && s.winner) {
+  const other = team === "a" ? "b" : "a";
+  if (s.phase === "running" && s.winner === team) {
+    stamp = "YOU WIN";
+    text = `${s.team_names[team]} cracked all ${s.rounds_total} vaults first. ${s.team_names[other]} keeps playing until the timer ends.`;
+  } else if (s.phase === "finished" && s.winner) {
     stamp = s.winner === team ? "YOU WIN" : "SESSION OVER";
     text = `${s.team_names[s.winner]} wins session ${s.session}. ${HOW_ENDED[s.how_ended](s)}`;
   } else if (s.phase === "tie") {
@@ -192,6 +223,9 @@ function renderOverlay(s) {
   els.overlay.hidden = !stamp;
   els.overlayStamp.textContent = stamp;
   els.overlayText.textContent = text;
+  const unsolved = s.phase === "running" ? [] : s.reveals.filter((r) => r.how === "unsolved");
+  els.overlayCodesTitle.hidden = els.overlayCodes.hidden = unsolved.length === 0;
+  els.overlayCodes.replaceChildren(...unsolved.map((r) => el("li", {}, revealText(r, s.team_names))));
 }
 
 function showStamp(word) {
@@ -347,11 +381,10 @@ function currentSection(s) {
     form.addEventListener("submit", (e) => { e.preventDefault(); runHost("rename", names); });
     parts.push(form);
   } else if (s.phase === "running") {
-    parts.push(
-      hostButton(`Show the next hint (${s.hints.length} of ${s.hints_total} showing)`, "next-hint"),
-      hostButton(`Skip this round for ${n.a}`, "skip", { team: "a" }, "quiet"),
-      hostButton(`Skip this round for ${n.b}`, "skip", { team: "b" }, "quiet"),
-    );
+    parts.push(hostButton(`Show the next hint (${s.hints.length} of ${s.hints_total} showing)`, "next-hint"));
+    for (const t of ["a", "b"]) {
+      if (!s.team_done[t]) parts.push(hostButton(`Skip this round for ${n[t]}`, "skip", { team: t }, "quiet"));
+    }
   } else if (s.phase === "tie") {
     parts.push(
       hostButton("Start the tiebreaker", "tiebreaker"),
@@ -402,7 +435,7 @@ function nextSection(s) {
 
 function renderHost(s, force = false) {
   if (!s) return;
-  const key = `${s.session}|${s.phase}|${s.hints.length}|${hostPin ? 1 : 0}|${confirmNew}`;
+  const key = `${s.session}|${s.phase}|${s.hints.length}|${s.team_done.a}|${s.team_done.b}|${hostPin ? 1 : 0}|${confirmNew}`;
   if (!force && key === hostKey) return;
   hostKey = key;
   if (!hostPin) { els.hostBody.replaceChildren(pinForm()); return; }

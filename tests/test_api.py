@@ -151,21 +151,24 @@ def test_new_session_needs_both_names(client):
     assert res.status_code == 409
 
 
-def test_results_list_sessions_without_codes_or_chats(client):
+def test_results_reveal_ended_codes_but_hide_live_ones_and_chats(client):
     start(client)
     game = client.app.state.game
     client.post("/api/chat", json={"team": "a", "message": "secret chat"})
-    all_codes = codes(client)
+    ended_codes = codes(client)
     for _ in range(3):
         client.post("/api/guess", json={"team": "a", "code": game.code_for("a")})
     client.post("/api/host/new-session", json={"a": "Kopi", "b": "Teh"}, headers=PIN)
+    start(client)
+    live_codes = [c for c in codes(client) if c not in ended_codes]
     res = client.get("/api/results")
     data = res.json()
     assert data["sessions"][0]["winner"] == "a"
+    assert {r["code"] for r in data["sessions"][0]["reveals"]} == set(ended_codes)
     assert data["current"]["session"] == 2
     assert data["current"]["teams"]["a"]["name"] == "Kopi"
     assert "secret chat" not in res.text
-    for code in all_codes:
+    for code in live_codes:
         assert code not in res.text
 
 

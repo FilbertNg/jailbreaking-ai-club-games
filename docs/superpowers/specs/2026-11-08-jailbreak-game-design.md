@@ -75,7 +75,8 @@ Per team: current round index, rounds cleared, time of last clear (seconds since
 
 Rules:
 - `start()`: lobby to running. New random codes (1000 to 9999, A and B never share a code in the same round), clears scores and chats, sets the end time to now + `game_minutes`.
-- `guess(team, code)`: rejects non 4-digit input. During a cooldown it returns the seconds left. A wrong guess adds 1 to wrong guesses and starts a `wrong_guess_cooldown_s` cooldown. A correct guess records the clear time, moves the team to the next round with an empty chat. Clearing the last round sets `finished` with that team as winner.
+- `guess(team, code)`: rejects non 4-digit input. During a cooldown it returns the seconds left. A wrong guess adds 1 to wrong guesses and starts a `wrong_guess_cooldown_s` cooldown. A correct guess records the clear time, reveals that code, and moves the team to the next round with an empty chat. The first team to clear the last round becomes the winner at once, but the phase stays `running` so the other team keeps playing; the session ends at time-up, or straight away if both teams clear everything. A team that cleared everything cannot chat or guess.
+- Code reveals (added 2026-11-08): every code is revealed when it is cracked (`cracked`), skipped by the host (`skipped`), or left uncracked when the timer, tiebreaker or session ends (`unsolved`). Reveals are shown on both team screens and stored in each `results.jsonl` line. Codes not yet revealed never leave the server.
 - Timer end (checked on every state read): the team with more rounds cleared wins. Same rounds: the earlier last clear wins, unless the two clear times are within `tie_window_s` (10) seconds or both teams cleared 0, which gives `tie`.
 - `start_tiebreaker()`: only from `tie`. New codes, the tiebreaker guard, `tiebreaker_minutes` on the clock. The first correct code wins. Time out gives `tiebreak_over`.
 - `award(team)`: from `tiebreak_over` (or `tie`), sets `finished` with that winner.
@@ -105,12 +106,12 @@ Rules:
 | --- | --- | --- |
 | `GET /` | anyone | Three links: Team A, Team B, Results |
 | `GET /team/{a or b}` | team | The game page |
-| `GET /api/state?team=a` | team | Game number, team names, phase, seconds left, both teams' rounds cleared, this team's round and chat, revealed hints, cooldown left, busy flag, winner. Never includes codes. |
+| `GET /api/state?team=a` | team | Game number, team names, phase, seconds left, both teams' rounds cleared, this team's round and chat, revealed hints, revealed codes, which teams have cleared everything, cooldown left, busy flag, winner. Never includes codes that are not revealed yet. |
 | `POST /api/chat` `{team, message}` | team | 1 to 500 chars. 409 if this team already has a message waiting. Calls the guard, censors, stores, returns the reply. 503 with a readable message on `GuardBusy` / `GuardError`. Only allowed in `running` or `tiebreaker`. |
 | `POST /api/guess` `{team, code}` | team | Result: correct, wrong (with cooldown), cooldown active, invalid. |
 | `POST /api/host/{action}` | host | Header `X-Host-Pin` must match `HOST_PIN`. Actions: `start`, `next-hint`, `skip` (body: team), `tiebreaker`, `award` (body: team), `new-session` (body: `{a, b}` names), `rename` (body: `{a, b}`). If `HOST_PIN` is unset, host actions are refused with a message saying to set it. |
 | `GET /results` | anyone | The results page |
-| `GET /api/results` | anyone | All saved sessions from `results.jsonl`, newest first, plus the current session's live standing. Never includes codes or chats. |
+| `GET /api/results` | anyone | All saved sessions from `results.jsonl`, newest first, plus the current session's live standing. Ended sessions include their revealed codes; the live session and all chats are never included. |
 
 `run()` starts uvicorn on `0.0.0.0:8000` and prints the LAN addresses for `/team/a` and `/team/b`.
 
