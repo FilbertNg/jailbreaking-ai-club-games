@@ -536,3 +536,7 @@ def test_live_standing(game, clock):
     assert live["phase"] == "round"
     assert live["round_number"] == 1
     assert "codes" not in repr(live)
+
+
+def test_public_state_carries_speech_language(game):
+    assert game.public_state("a")["speech_lang"] == "en-US"

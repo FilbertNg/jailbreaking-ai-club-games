@@ -9,7 +9,7 @@ A two-team jailbreak game for an AI Club event. Each team chats with VaultBot (a
 ## Current state
 
 - Built and committed on `master`, pushed to https://github.com/FilbertNg/jailbreaking-ai-club-games.
-- `uv run pytest`: 112 tests pass.
+- `uv run pytest`: 115 tests pass.
 - Played end to end in a browser: lobby, timed rounds, pause, add and set time, hints, end round, Round 3 Medium/Hard choice, chat with the real model, codes revealed, winner, tie, tiebreaker, award, new session, results page, server restart.
 
 ## Run it
@@ -49,6 +49,7 @@ A chat message goes: page, `POST /api/chat`, per-team lock (one message at a tim
 - **Random codes, revealed later:** every team, round, session and tiebreaker gets a new random code (1000 to 9999). A code is shown on both screens once it is cracked, and every uncracked code when its round ends. Ended sessions list their codes on the results page.
 - **Sessions, not reset:** "New session" saves the current result (or "stopped early") to `results.jsonl` and opens a fresh lobby with a new number. In the lobby it only renames, so session numbers have no gaps.
 - **Host controls** live in a PIN-locked dialog on the team page. There is no separate dashboard. The PIN is remembered per browser tab.
+- **Speech input:** the Speak button uses the browser's Web Speech API (Chrome and Edge send the audio to their own speech service; no audio reaches our server). It only fills the message box, never sends, and stops when the team types, sends, or the round pauses or ends. Laptop B needs a Chrome flag because its address is plain `http://` (see README). Language comes from `speech_lang` in `config.json`.
 - **Look:** a security case file. Paper colors, Courier Prime for the transcript, Public Sans for the interface, one red stamp accent. Light theme only, on purpose.
 
 The full design is in `docs/superpowers/specs/2026-11-08-jailbreak-game-design.md`, and the step-by-step build plan with all code is in `docs/superpowers/plans/2026-11-08-jailbreak-game.md`.
@@ -79,8 +80,9 @@ Samples are small. Play one full session yourself before the event.
 1. Change `HOST_PIN` in `.env`.
 2. On Laptop B: `git clone https://github.com/FilbertNg/jailbreaking-ai-club-games.git`, `uv sync`, create its own `.env`, run `uv run jailbreak` once to confirm it works as a backup server.
 3. Play-test the round times: 3 minutes per round is the starting guess, and replies take 3 to 12 seconds each.
-4. Play one full session on both laptops over the event Wi-Fi. Allow Python through Windows Firewall on private networks.
-5. Before the first session, delete `state.json` and `results.jsonl` so the event starts at session 1.
+4. On Laptop B, set the Chrome microphone flag from the README and try the Speak button once.
+5. Play one full session on both laptops over the event Wi-Fi. Allow Python through Windows Firewall on private networks.
+6. Before the first session, delete `state.json` and `results.jsonl` so the event starts at session 1.
 
 ## Tips for working on the code
 

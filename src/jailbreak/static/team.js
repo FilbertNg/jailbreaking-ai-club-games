@@ -10,6 +10,7 @@ const els = {
   overlayCodesTitle: $("overlay-codes-title"), overlayCodes: $("overlay-codes"),
   transcript: $("transcript"), chat: $("chat"), chatEmpty: $("chat-empty"),
   sendForm: $("send-form"), message: $("message"), sendBtn: $("send-btn"), sendNote: $("send-note"),
+  micBtn: $("mic-btn"),
   guessForm: $("guess-form"), code: $("code"), guessBtn: $("guess-btn"), guessNote: $("guess-note"),
   stamp: $("stamp"), overlay: $("overlay"), overlayStamp: $("overlay-stamp"), overlayText: $("overlay-text"),
   hostBtn: $("host-btn"), hostDialog: $("host-dialog"), hostBody: $("host-body"),
@@ -209,6 +210,8 @@ function renderControls(s) {
   els.message.disabled = !active;
   els.sendBtn.disabled = !active || sending || s.busy;
   els.code.disabled = !active;
+  if (!active || sending) cancelSpeech();
+  els.micBtn.disabled = !active || sending;
   const wait = s.cooldown_s || 0;
   els.guessBtn.disabled = !active || guessing || wait > 0;
   els.guessBtn.textContent = wait > 0 ? `Try again in ${wait}s` : "Try this code";
@@ -254,8 +257,92 @@ els.message.addEventListener("keydown", (e) => {
   }
 });
 
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizer = null;
+let speechBase = "";
+let speechFailed = false;
+
+const SPEECH_ERRORS = {
+  "no-speech": "No speech heard. Press Speak and try again.",
+  "audio-capture": "No microphone found on this laptop.",
+  "network": "Speech needs an internet connection. Type the message instead.",
+  "language-not-supported": "This browser cannot recognise the language set in config.json.",
+};
+
+function speechErrorText(code) {
+  if (code === "not-allowed" || code === "service-not-allowed") {
+    return window.isSecureContext
+      ? "The microphone is blocked. Allow it from the icon in the address bar, then press Speak."
+      : "The browser blocks the microphone on this address. The README explains the Chrome setting that fixes it.";
+  }
+  return SPEECH_ERRORS[code] || "Speech stopped working. Type the message instead.";
+}
+
+function renderMic() {
+  const on = recognizer !== null;
+  els.micBtn.textContent = on ? "Stop" : "Speak";
+  els.micBtn.setAttribute("aria-pressed", String(on));
+  els.micBtn.classList.toggle("listening", on);
+}
+
+function startSpeech() {
+  speechBase = els.message.value.trim();
+  speechFailed = false;
+  const rec = new Recognition();
+  rec.lang = (state && state.speech_lang) || "en-US";
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onresult = (e) => {
+    let said = "";
+    for (const result of e.results) said += result[0].transcript;
+    els.message.value = [speechBase, said.trim()].filter(Boolean).join(" ").slice(0, 500);
+  };
+  rec.onerror = (e) => {
+    if (e.error === "aborted") return;
+    speechFailed = true;
+    note(els.sendNote, speechErrorText(e.error), true);
+  };
+  rec.onend = () => {
+    if (recognizer !== rec) return;
+    recognizer = null;
+    renderMic();
+    if (!speechFailed && els.message.value.trim()) note(els.sendNote, "Check the text, then press Send.");
+  };
+  recognizer = rec;
+  try {
+    rec.start();
+  } catch {
+    recognizer = null;
+    note(els.sendNote, "Speech could not start. Type the message instead.", true);
+  }
+  renderMic();
+  if (recognizer) note(els.sendNote, "Listening. Speak, then press Stop.");
+}
+
+// Drop anything still being recognised; the text box is the source of truth from here on.
+function cancelSpeech() {
+  if (!recognizer) return;
+  const rec = recognizer;
+  recognizer = null;
+  rec.onresult = null;
+  rec.abort();
+  renderMic();
+  note(els.sendNote, "");
+}
+
+if (Recognition) {
+  els.micBtn.hidden = false;
+  els.message.placeholder = "Write or speak to VaultBot. Enter sends, Shift+Enter adds a line.";
+  els.micBtn.addEventListener("click", () => {
+    if (recognizer) recognizer.stop();
+    else startSpeech();
+  });
+  els.message.addEventListener("input", cancelSpeech);
+}
+
 els.sendForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  cancelSpeech();
   const text = els.message.value.trim();
   if (!text) { note(els.sendNote, "Write a message first.", true); return; }
   if (sending || !state) return;

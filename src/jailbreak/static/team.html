@@ -44,6 +44,7 @@
     <form id="send-form" class="composer">
       <label for="message" class="visually-hidden">Message to VaultBot</label>
       <textarea id="message" maxlength="500" rows="2" placeholder="Write to VaultBot. Enter sends, Shift+Enter adds a line."></textarea>
+      <button type="button" id="mic-btn" class="quiet" aria-pressed="false" hidden>Speak</button>
       <button type="submit" id="send-btn">Send</button>
       <p id="send-note" class="note" role="status"></p>
     </form>

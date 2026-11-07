@@ -40,6 +40,7 @@ class GameConfig:
     tie_window_s: float
     rounds: tuple[RoundConfig, ...]
     tiebreaker: RoundConfig
+    speech_lang: str = "en-US"
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ def parse_config(raw: dict) -> GameConfig:
             tie_window_s=float(raw["tie_window_s"]),
             rounds=tuple(_round(r, f"rounds[{i}]") for i, r in enumerate(raw["rounds"])),
             tiebreaker=_round(raw["tiebreaker"], "tiebreaker"),
+            speech_lang=str(raw.get("speech_lang", "en-US")),
         )
     except KeyError as exc:
         raise ConfigError(f"config.json is missing {exc.args[0]!r}") from None

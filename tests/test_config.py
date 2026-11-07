@@ -72,3 +72,12 @@ def test_blank_pin_means_no_host_controls(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text("GEMINI_API_KEY=abc\n", encoding="utf-8")
     assert load_settings(env).host_pin is None
+
+
+def test_speech_lang_defaults_to_english(cfg):
+    assert cfg.speech_lang == "en-US"
+
+
+def test_speech_lang_can_be_set(test_config_dict):
+    test_config_dict["speech_lang"] = "id-ID"
+    assert parse_config(test_config_dict).speech_lang == "id-ID"

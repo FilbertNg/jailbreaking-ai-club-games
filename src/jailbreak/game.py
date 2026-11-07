@@ -147,6 +147,7 @@ class Game:
             "reveals": [dict(r) for r in self.reveals],
             "wrong_guesses": {k: v.wrong_guesses for k, v in self.teams.items()},
             "tiebreak_wrong": {k: v.tiebreak_wrong for k, v in self.teams.items()},
+            "speech_lang": self.cfg.speech_lang,
         }
 
     def live_standing(self) -> dict:

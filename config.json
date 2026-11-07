@@ -6,6 +6,7 @@
   "team_names": { "a": "Team A", "b": "Team B" },
   "wrong_guess_cooldown_s": 10,
   "tie_window_s": 10,
+  "speech_lang": "en-US",
   "rounds": [
     {
       "title": "Friendly guard",

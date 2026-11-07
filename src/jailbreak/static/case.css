@@ -159,7 +159,9 @@ input:disabled, textarea:disabled { background: var(--folder); }
 .chat .redacted { background: var(--ink); color: var(--paper); padding: 0 6px; }
 .chat-empty { margin: 0; color: var(--ink-soft); }
 
-.composer { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.composer { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: end; }
+.composer #mic-btn.listening,
+.composer #mic-btn.listening:hover:not(:disabled) { background: var(--stamp); border-color: var(--stamp); color: var(--paper); }
 .composer textarea { min-height: 64px; resize: vertical; }
 .composer .note { grid-column: 1 / -1; }
 
@@ -286,7 +288,8 @@ dialog h2 { margin: 0 0 4px; font-size: 1.3rem; }
 
 @media (max-width: 560px) {
   .chat li { grid-template-columns: 1fr; gap: 0; }
-  .composer { grid-template-columns: 1fr; }
+  .composer { grid-template-columns: 1fr 1fr; }
+  .composer textarea { grid-column: 1 / -1; }
   .checker { grid-template-columns: 1fr auto; }
   .checker label, .checker .note { grid-column: 1 / -1; }
   .transcript { height: 48dvh; }

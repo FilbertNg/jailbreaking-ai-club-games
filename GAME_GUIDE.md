@@ -37,7 +37,7 @@ Press **Host** at the bottom of either team screen and type the PIN. The panel s
 
 ## Rules (read these aloud)
 1. There are **3 rounds of about 3 minutes**. Both teams play each round at the same time. The team that cracks the most vaults wins.
-2. **Relay rule:** after every message, the keyboard passes to a *different* teammate.
+2. **Relay rule:** after every message, the keyboard passes to a *different* teammate. You can type or press **Speak** and talk; check the text before you press Send.
 3. Talk to the robot **only in the chat**. No other AI tools, no internet search, no hacking the website. Attack the robot, not the system.
 4. Keep it friendly. No insults and no personal information. The host can read every chat.
 5. Found a code? Type it in the code box. Each wrong guess has a 10-second cooldown, so do not guess numbers. Each team has its own codes, so hearing the other team's code does not help.
@@ -58,6 +58,7 @@ Press **Host** at the bottom of either team screen and type the PIN. The panel s
 | A team struggled in Round 2 | Start Round 3 as **Medium**. |
 | You need to explain something mid-round | **Pause**. Chats and guesses freeze for both teams until **Resume**. |
 | "The guard is busy" | The server already tries three models in turn. Wait 10 seconds and send again. If it keeps happening, the free-tier limit is used up for the minute; **Pause** and wait a minute. |
+| Speak says the microphone is blocked | On Laptop A, allow the microphone from the address bar. On Laptop B, set the Chrome flag in the README once. Typing always works. |
 | Laptop B shows "Lost connection" | Check both laptops are on the same Wi-Fi and the server window on Laptop A is still open. |
 | Someone breaks a rule | Warn once. If it continues, ask that person to sit out. |
 | Do not start a new session during a tie | **New session** saves the current one as stopped early, with no winner. |
