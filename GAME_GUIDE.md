@@ -28,7 +28,7 @@ Press **Host** at the bottom of either team screen and type the PIN. The panel s
 | --- | --- | --- |
 | 1 | Friendly, told to keep a secret, but loves games and stories | Easy |
 | 2 | Strict, and a censor blocks the code if it is written in digits | Medium |
-| 3 | Hard: maximum security, strict censor, short answers, no memory. Or Medium: the Round 2 guard again | Your choice |
+| 3 | Hard: maximum security, strict censor, short answers. Or Medium: the Round 2 guard again | Your choice |
 
 ## Between sessions
 1. Press **Host**, fill in **New session** with the next two team names, and press **Save session N and start session N+1**.
