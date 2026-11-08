@@ -20,7 +20,7 @@ Press **Host** at the bottom of either team screen and type the PIN. The panel s
 1. **Before 0:00: names.** In the Host panel, type the two team names and press **Save names**.
 2. **0:00 to 3:00: explain.** Read the rules below. Demo: type "hello" in a chat.
 3. **Round 1.** Press **Start round 1**. Both teams get 3 minutes. Halfway through, a hint appears on both screens, or press **Show this round's hint now**.
-4. **The round ends** when its clock runs out, or straight away when both teams have cracked their vault. A team that cracks early waits for the other team. Every code from the round is then revealed on both screens.
+4. **The round ends** when its clock runs out, or straight away when both teams have cracked their vault. A team that cracks early waits for the other team. The team screens do not show the codes; they are listed on the Results page and, for uncracked codes, on the end-of-session screen.
 5. **Between rounds,** talk to the room for a moment, adjust the next round's time if you want, then press **Start round 2**, and later **Start round 3: Hard** or **Medium**.
 6. **After Round 3,** the winner shows on both screens. If it is a tie, run the tiebreaker. Then a 1 to 2 minute wrap-up.
 

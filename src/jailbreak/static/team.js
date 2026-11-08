@@ -6,7 +6,7 @@ const els = {
   conn: $("conn-bar"), session: $("case-session"), timer: $("timer"), score: $("score"),
   teamName: $("team-name"), title: $("round-title"), notice: $("notice"),
   hintCard: $("hint-card"), hintToggle: $("hint-toggle"), notesBody: $("notes-body"),
-  hintTitle: $("hint-title"), hintList: $("hint-list"), revealTitle: $("reveal-title"), revealList: $("reveal-list"),
+  hintList: $("hint-list"),
   overlayCodesTitle: $("overlay-codes-title"), overlayCodes: $("overlay-codes"),
   transcript: $("transcript"), chat: $("chat"), chatEmpty: $("chat-empty"),
   sendForm: $("send-form"), message: $("message"), sendBtn: $("send-btn"), sendNote: $("send-note"),
@@ -134,18 +134,13 @@ function render(s) {
 }
 
 function renderNotes(s, prev) {
-  const count = s.hints.length + s.reveals.length;
+  const count = s.hints.length;
   els.hintCard.hidden = count === 0;
   if (count === 0) return;
-  const before = prev && prev.session === s.session ? prev.hints.length + prev.reveals.length : count;
+  const before = prev && prev.session === s.session ? prev.hints.length : count;
   if (els.hintList.children.length !== s.hints.length) {
     els.hintList.replaceChildren(...s.hints.map((h) => el("li", {}, h)));
   }
-  if (els.revealList.children.length !== s.reveals.length) {
-    els.revealList.replaceChildren(...s.reveals.map((r) => el("li", {}, revealText(r, s.team_names))));
-  }
-  els.hintTitle.hidden = els.hintList.hidden = s.hints.length === 0;
-  els.revealTitle.hidden = els.revealList.hidden = s.reveals.length === 0;
   if (count > before) {
     hintsOpen = true;
     els.hintCard.classList.remove("arrive");
@@ -154,10 +149,7 @@ function renderNotes(s, prev) {
   }
   els.notesBody.hidden = !hintsOpen;
   els.hintToggle.setAttribute("aria-expanded", String(hintsOpen));
-  const parts = [];
-  if (s.hints.length) parts.push(`${s.hints.length} ${s.hints.length === 1 ? "hint" : "hints"}`);
-  if (s.reveals.length) parts.push(`${s.reveals.length} ${s.reveals.length === 1 ? "code" : "codes"}`);
-  els.hintToggle.textContent = `${parts.join(", ")} (${hintsOpen ? "hide" : "show"})`;
+  els.hintToggle.textContent = `${count} ${count === 1 ? "hint" : "hints"} (${hintsOpen ? "hide" : "show"})`;
 }
 
 function noticeFor(s) {
@@ -178,7 +170,7 @@ function renderNotice(s) {
 function emptyText(s) {
   if (s.phase === "lobby") return "Waiting for the host to start the session.";
   if (isPlaying(s)) return "No messages yet. Say hello to VaultBot, then try to get the code out of it.";
-  if (s.phase === "intermission") return "Round over. The revealed codes are in the notes.";
+  if (s.phase === "intermission") return "Round over.";
   return "";
 }
 
@@ -400,7 +392,7 @@ els.guessForm.addEventListener("submit", async (e) => {
 
 const DONE = {
   "start-round": () => `Round ${state.round_number} started.`,
-  "end-round": () => "Round ended. The codes are revealed.",
+  "end-round": () => "Round ended.",
   pause: () => "Paused. Both clocks and chats are frozen.",
   resume: () => "Resumed.",
   "add-time": (b) => `Added ${b.seconds / 60} min.`,
@@ -509,7 +501,7 @@ function clockSection(s) {
   if (s.phase === "round") {
     if (!s.hint_given) parts.push(hostButton("Show this round's hint now", "show-hint", {}, "quiet"));
     if (confirmEnd) {
-      parts.push(el("p", { class: "note alert" }, "Both teams stop now and any uncracked code is revealed."));
+      parts.push(el("p", { class: "note alert" }, "Both teams stop now."));
       parts.push(hostButton(`Yes, end round ${s.round_number} now`, "end-round", {}, "danger"));
     } else {
       parts.push(el("button", { type: "button", class: "quiet", onclick: () => { confirmEnd = true; renderHost(state, true); } },
