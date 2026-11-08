@@ -81,3 +81,21 @@ def test_speech_lang_defaults_to_english(cfg):
 def test_speech_lang_can_be_set(test_config_dict):
     test_config_dict["speech_lang"] = "id-ID"
     assert parse_config(test_config_dict).speech_lang == "id-ID"
+
+
+def test_points_default_and_override(cfg):
+    assert (cfg.rounds[0].points_first, cfg.rounds[0].points_second) == (3, 1)
+    assert (cfg.rounds[2].points_first, cfg.rounds[2].points_second) == (6, 2)
+    assert cfg.rule_broken_points == 3
+
+
+def test_second_place_cannot_beat_first(test_config_dict):
+    test_config_dict["rounds"][0]["points_second"] = 5
+    with pytest.raises(ConfigError, match="points"):
+        parse_config(test_config_dict)
+
+
+def test_real_game_is_worth_twelve_points():
+    cfg = load_config(ROOT / "config.json")
+    assert [r.points_first for r in cfg.rounds] == [3, 3, 6]
+    assert [r.points_second for r in cfg.rounds] == [1, 1, 2]

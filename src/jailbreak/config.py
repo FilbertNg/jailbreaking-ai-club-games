@@ -27,6 +27,8 @@ class RoundConfig:
     max_reply_chars: int
     temperature: float
     easier_option: int | None = None
+    points_first: int = 3
+    points_second: int = 1
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class GameConfig:
     rounds: tuple[RoundConfig, ...]
     tiebreaker: RoundConfig
     speech_lang: str = "en-US"
+    rule_broken_points: int = 3
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,8 @@ def _round(raw: dict, where: str) -> RoundConfig:
             max_reply_chars=int(raw["max_reply_chars"]),
             temperature=float(raw["temperature"]),
             easier_option=None if easier is None else int(easier),
+            points_first=int(raw.get("points_first", 3)),
+            points_second=int(raw.get("points_second", 1)),
         )
     except KeyError as exc:
         raise ConfigError(f"{where} is missing {exc.args[0]!r}") from None
@@ -70,6 +75,8 @@ def _round(raw: dict, where: str) -> RoundConfig:
         raise ConfigError(f"{where} prompt must contain {{code}}")
     if rnd.censor not in CENSOR_MODES:
         raise ConfigError(f"{where} censor must be one of {', '.join(CENSOR_MODES)}")
+    if not 0 <= rnd.points_second <= rnd.points_first:
+        raise ConfigError(f"{where} points_second must be between 0 and points_first")
     if not 0 < rnd.minutes <= 60:
         raise ConfigError(f"{where} minutes must be between 0 and 60")
     return rnd
@@ -88,6 +95,7 @@ def parse_config(raw: dict) -> GameConfig:
             rounds=tuple(_round(r, f"rounds[{i}]") for i, r in enumerate(raw["rounds"])),
             tiebreaker=_round(raw["tiebreaker"], "tiebreaker"),
             speech_lang=str(raw.get("speech_lang", "en-US")),
+            rule_broken_points=int(raw.get("rule_broken_points", 3)),
         )
     except KeyError as exc:
         raise ConfigError(f"config.json is missing {exc.args[0]!r}") from None

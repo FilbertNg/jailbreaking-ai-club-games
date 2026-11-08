@@ -51,7 +51,7 @@ Run `uv run jailbreak` on Laptop B and open its own `/team/b`; Laptop A (once it
 
 ## Changing the game
 
-Everything lives in `config.json`. Each round has a `title`, a `difficulty` label, a base time in `minutes`, its own `hint`, and the guard `prompt` (`{code}` marks where the secret goes). `"easier_option": 2` on Round 3 is what offers the Round 2 guard as a Medium choice. `speech_lang` sets the language the Speak button listens for (`en-US` by default; for example `id-ID` for Indonesian). Restart the server after editing it. The host can still change every round's time from the Host panel during the event.
+Everything lives in `config.json`. Each round has a `title`, a `difficulty` label, a base time in `minutes`, its own `hint`, and the guard `prompt` (`{code}` marks where the secret goes). `"easier_option": 2` on Round 3 is what offers the Round 2 guard as a Medium choice. `points_first` and `points_second` set what each round pays (Round 3 pays 6 and 2), and `rule_broken_points` is the minimum the other team gets when the host marks a broken rule. `speech_lang` sets the language the Speak button listens for (`en-US` by default; for example `id-ID` for Indonesian). Restart the server after editing it. The host can still change every round's time from the Host panel during the event.
 
 The guard tries `gemini-3.5-flash-lite` first, then `gemini-3.1-flash-lite`, then `gemma-4-26b-a4b-it`. A model that hits a rate limit or an error is skipped for 60 seconds. If Gemma keeps failing, swap it for `gemma-4-31b-it` in `config.json`.
 

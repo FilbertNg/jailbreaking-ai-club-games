@@ -264,11 +264,11 @@ def test_variant_must_be_offered(game, clock):
 
 # Winner
 
-def test_more_vaults_wins(game, clock, results):
+def test_more_points_wins(game, clock, results):
     play_round(game, clock, a_at=30, b_at=20)
     play_round(game, clock, a_at=30)
     play_round(game, clock)
-    assert (game.phase, game.winner, game.how_ended) == ("finished", "a", "more_vaults")
+    assert (game.phase, game.winner, game.how_ended) == ("finished", "a", "more_points")
     assert len(results) == 1
     assert results[0]["teams"]["a"]["rounds_cleared"] == 2
     assert results[0]["plan"] == ["Easy", "Medium", "Hard"]
@@ -283,7 +283,7 @@ def test_same_vaults_lower_total_time_wins(game, clock):
 
 def test_totals_within_ten_seconds_tie(game, clock, results):
     play_round(game, clock, a_at=30, b_at=35)
-    play_round(game, clock, a_at=50, b_at=50)
+    play_round(game, clock, a_at=55, b_at=50)
     play_round(game, clock)
     assert game.phase == "tie"
     assert results == []
@@ -532,7 +532,7 @@ def test_live_standing(game, clock):
     game.start_round()
     crack(game, "b")
     live = game.live_standing()
-    assert live["teams"]["b"] == {"name": "Team B", "rounds_cleared": 1}
+    assert live["teams"]["b"] == {"name": "Team B", "rounds_cleared": 1, "points": 3}
     assert live["phase"] == "round"
     assert live["round_number"] == 1
     assert "codes" not in repr(live)
@@ -540,3 +540,101 @@ def test_live_standing(game, clock):
 
 def test_public_state_carries_speech_language(game):
     assert game.public_state("a")["speech_lang"] == "en-US"
+
+
+# Points
+
+def points(game):
+    return game.public_state("a")["points"]
+
+
+def test_first_crack_scores_more_than_second(game, clock):
+    game.start_round()
+    assert crack(game, "b")["points"] == 3
+    assert points(game) == {"a": 0, "b": 3}
+    clock.advance(5)
+    assert crack(game, "a")["points"] == 1
+    assert points(game) == {"a": 1, "b": 3}
+
+
+def test_last_round_is_double(game, clock, results):
+    play_round(game, clock, a_at=10, b_at=20)
+    play_round(game, clock, a_at=10, b_at=20)
+    play_round(game, clock, a_at=10, b_at=20)
+    assert points(game) == {"a": 12, "b": 4}
+    assert results[0]["teams"]["a"]["points"] == [3, 3, 6]
+    assert results[0]["teams"]["a"]["total_points"] == 12
+
+
+def test_medium_round_three_is_still_double(game, clock):
+    play_round(game, clock)
+    play_round(game, clock)
+    play_round(game, clock, a_at=10, variant=2)
+    assert points(game) == {"a": 6, "b": 0}
+
+
+def test_uncracked_vault_scores_nothing(game, clock):
+    play_round(game, clock, a_at=10)
+    assert points(game) == {"a": 3, "b": 0}
+
+
+def test_state_says_what_this_round_is_worth(game, clock):
+    assert game.public_state("a")["round_points"] is None
+    game.start_round()
+    assert game.public_state("a")["round_points"] == {"first": 3, "second": 1}
+
+
+def test_equal_points_more_vaults_wins(game, clock):
+    play_round(game, clock, b_at=10)
+    play_round(game, clock, b_at=10)
+    play_round(game, clock, a_at=5)
+    assert points(game) == {"a": 6, "b": 6}
+    assert (game.winner, game.how_ended) == ("b", "more_vaults")
+
+
+def test_rule_broken_ends_round_and_gives_other_team_points(game, clock):
+    game.start_round()
+    crack(game, "a")
+    game.rule_broken("a")
+    assert points(game) == {"a": 0, "b": 3}
+    assert game.phase == "intermission"
+    assert game.teams["a"].rounds_cleared == 0
+    assert revealed(game)[("a", 1)][1] == "rule_broken"
+
+
+def test_rule_broken_never_lowers_the_other_team(game, clock):
+    play_round(game, clock)
+    play_round(game, clock)
+    game.start_round()
+    crack(game, "b")
+    game.rule_broken("a")
+    assert points(game) == {"a": 0, "b": 6}
+
+
+def test_rule_broken_needs_a_running_round(game):
+    with pytest.raises(GameRuleError):
+        game.rule_broken("a")
+
+
+def test_tiebreaker_adds_no_points(game, clock):
+    for _ in range(3):
+        play_round(game, clock)
+    game.start_tiebreaker()
+    assert crack(game, "a")["points"] == 0
+    assert points(game) == {"a": 0, "b": 0}
+
+
+def test_points_survive_a_restart(game, cfg, clock):
+    game.start_round()
+    crack(game, "a")
+    again = Game.from_dict(cfg, game.to_dict(), now=clock)
+    assert again.public_state("a")["points"] == {"a": 3, "b": 0}
+
+
+def test_old_save_without_points_still_loads(game, cfg, clock):
+    game.start_round()
+    data = game.to_dict()
+    for t in data["teams"].values():
+        del t["points"]
+    again = Game.from_dict(cfg, data, now=clock)
+    assert crack(again, "a")["points"] == 3

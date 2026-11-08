@@ -5,3 +5,4 @@ results.jsonl
 .venv/
 __pycache__/
 .pytest_cache/
+brag-output*/

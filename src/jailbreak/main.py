@@ -206,6 +206,8 @@ def create_app(
             game.start_tiebreaker(minutes=body.minutes)
         elif action == "award":
             game.award(check_team(body.team))
+        elif action == "rule-broken":
+            game.rule_broken(check_team(body.team))
         elif action == "new-session":
             game.new_session(names)
         elif action == "rename":

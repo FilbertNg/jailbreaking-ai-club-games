@@ -20,6 +20,7 @@ TEST_CONFIG = {
          "prompt": "R2 code {code}", "censor": "digits",
          "memory_messages": 20, "max_reply_chars": 800, "temperature": 0.7},
         {"title": "Max", "difficulty": "Hard", "minutes": 3, "hint": "hint three", "easier_option": 2,
+         "points_first": 6, "points_second": 2,
          "prompt": "R3 code {code}", "censor": "strict",
          "memory_messages": 0, "max_reply_chars": 160, "temperature": 0.3},
     ],

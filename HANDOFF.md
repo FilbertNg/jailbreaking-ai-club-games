@@ -9,7 +9,7 @@ A two-team jailbreak game for an AI Club event. Each team chats with VaultBot (a
 ## Current state
 
 - Built and committed on `master`, pushed to https://github.com/FilbertNg/jailbreaking-ai-club-games.
-- `uv run pytest`: 115 tests pass.
+- `uv run pytest`: 130 tests pass.
 - Played end to end in a browser: lobby, timed rounds, pause, add and set time, hints, end round, Round 3 Medium/Hard choice, chat with the real model, codes revealed, winner, tie, tiebreaker, award, new session, results page, server restart.
 
 ## Run it
@@ -44,7 +44,8 @@ A chat message goes: page, `POST /api/chat`, per-team lock (one message at a tim
 - **Short answers in Round 3** come from cutting the reply to 160 characters on the server, not from a low token limit. Gemma 4 spends output tokens on thinking first, and a 60-token limit returned empty replies in testing.
 - **Shared timed rounds:** both teams play Round N at the same time on one clock (base 3 minutes, set per round in the lobby or when starting a round). A round ends at 0:00 or as soon as both teams crack it. Between rounds the game waits for the host. The host can add time, set the time left, pause, show the hint early, or end the round.
 - **Round 3 difficulty:** `easier_option` in `config.json` lets the host start Round 3 as Medium (the Round 2 guard, new code) instead of Hard. The choice is saved as the session's `plan`.
-- **Winner:** most vaults cracked, then the lower total crack time (seconds from each round's start, pauses excluded). Within `tie_window_s` (10 s) or 0 to 0 is a tie.
+- **Points:** modelled on the Mute game so a game is worth 12 at most. First to crack pays 3, second pays 1, Round 3 is double (6 and 2) even when played on the Medium guard. A broken rule, set by the host, gives that team 0 for the round and the other team at least 3, and ends the round. The tiebreaker adds no points.
+- **Winner:** most points, then most vaults, then the lower total crack time (seconds from each round's start, pauses excluded). Within `tie_window_s` (10 s) or 0 to 0 is a tie.
 - **Hints:** one per round, shown at the halfway point of that round's (possibly extended) time, or earlier by the host.
 - **Random codes, revealed later:** every team, round, session and tiebreaker gets a new random code (1000 to 9999). The team screens do not list revealed codes during play (it distracted players); the codes nobody cracked show on the end-of-session screen, and the results page lists every code.
 - **Sessions, not reset:** "New session" saves the current result (or "stopped early") to `results.jsonl` and opens a fresh lobby with a new number. In the lobby it only renames, so session numbers have no gaps.

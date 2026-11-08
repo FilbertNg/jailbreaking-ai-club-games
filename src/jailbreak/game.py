@@ -22,6 +22,7 @@ class TeamState:
     name: str
     codes: list[str] = field(default_factory=list)
     crack_times: list[float | None] = field(default_factory=list)
+    points: list[int] = field(default_factory=list)
     tiebreak_code: str = ""
     chat: list[dict] = field(default_factory=list)
     wrong_guesses: int = 0
@@ -31,6 +32,10 @@ class TeamState:
     @property
     def rounds_cleared(self) -> int:
         return sum(1 for t in self.crack_times if t is not None)
+
+    @property
+    def total_points(self) -> int:
+        return sum(self.points)
 
     @property
     def total_time(self) -> float:
@@ -130,6 +135,9 @@ class Game:
             "seconds_left": math.ceil(self._remaining()) if playing else None,
             "rounds_total": len(self.cfg.rounds),
             "rounds_cleared": {k: v.rounds_cleared for k, v in self.teams.items()},
+            "points": {k: v.total_points for k, v in self.teams.items()},
+            "round_points": self._round_points(),
+            "rule_broken_points": self.cfg.rule_broken_points,
             "total_time": {k: v.total_time for k, v in self.teams.items()},
             "round_number": None if in_tiebreak else max(1, self.round_no + 1),
             "round_name": self._round_name(),
@@ -162,7 +170,8 @@ class Game:
             "seconds_left": math.ceil(self._remaining()) if playing else None,
             "winner": self.winner,
             "how_ended": self.how_ended,
-            "teams": {k: {"name": v.name, "rounds_cleared": v.rounds_cleared} for k, v in self.teams.items()},
+            "teams": {k: {"name": v.name, "rounds_cleared": v.rounds_cleared, "points": v.total_points}
+                      for k, v in self.teams.items()},
         }
 
     # Host: setting up
@@ -220,6 +229,7 @@ class Game:
             t = self.teams[team]
             t.codes.append(code)
             t.crack_times.append(None)
+            t.points.append(0)
             t.chat = []
             t.cooldown_until = 0.0
         self.plan.append(variant - 1)
@@ -234,6 +244,20 @@ class Game:
         self.tick()
         if self.phase != "round":
             raise GameRuleError("No round is running.")
+        self._end_round()
+
+    def rule_broken(self, team: str) -> None:
+        self.tick()
+        if self.phase != "round":
+            raise GameRuleError("A team can only lose a round while that round is running.")
+        k = self.round_no
+        offender = self.teams[team]
+        other = self.teams["b" if team == "a" else "a"]
+        offender.points[k] = 0
+        offender.crack_times[k] = None
+        other.points[k] = max(other.points[k], self.cfg.rule_broken_points)
+        self.reveals = [r for r in self.reveals if not (r["team"] == team and r["vault"] == k + 1)]
+        self._reveal(team, k + 1, "rule_broken")
         self._end_round()
 
     def pause(self) -> None:
@@ -334,19 +358,22 @@ class Game:
         if now < t.cooldown_until:
             return {"result": "cooldown", "cooldown_s": round(t.cooldown_until - now, 1)}
         if code == self.code_for(team):
+            earned = 0
             if self.phase == "tiebreaker":
                 self._reveal(team, None, "cracked")
                 self._reveal_unsolved()
                 self._stop_clock()
                 self._finish(team, "tiebreaker")
             else:
+                earned = self._points_for_crack(team)
+                t.points[self.round_no] = earned
                 t.crack_times[self.round_no] = round(self._elapsed(), 1)
                 self._reveal(team, self.round_no + 1, "cracked")
                 if all(self._cracked_now(k) for k in TEAMS):
                     self._end_round()
                 else:
                     self._changed()
-            return {"result": "correct", "cooldown_s": 0}
+            return {"result": "correct", "cooldown_s": 0, "points": earned}
         if self.phase == "tiebreaker":
             t.tiebreak_wrong += 1
         else:
@@ -416,6 +443,8 @@ class Game:
                     "winner", "how_ended", "reveals"):
             setattr(game, key, data[key])
         game.teams = {t: TeamState(**data["teams"][t]) for t in TEAMS}
+        for t in game.teams.values():
+            t.points += [0] * (len(t.crack_times) - len(t.points))
         return game
 
     # Internals
@@ -424,6 +453,18 @@ class Game:
         if self.phase in ("tiebreaker", "tiebreak_over"):
             return f"Tiebreaker: {self.cfg.tiebreaker.title}"
         return f"Round {max(1, self.round_no + 1)}: {self.current_round().title}"
+
+    def _round_points(self) -> dict | None:
+        if self.phase != "round":
+            return None
+        slot = self.cfg.rounds[self.round_no]
+        return {"first": slot.points_first, "second": slot.points_second}
+
+    def _points_for_crack(self, team: str) -> int:
+        # Scored by round position, so a Round 3 played on the Medium guard is still double.
+        slot = self.cfg.rounds[self.round_no]
+        other = self.teams["b" if team == "a" else "a"]
+        return slot.points_second if other.crack_times[self.round_no] is not None else slot.points_first
 
     def _next_options(self) -> list[int]:
         k = self.round_no + 1
@@ -518,7 +559,9 @@ class Game:
 
     def _decide_winner(self) -> None:
         a, b = self.teams["a"], self.teams["b"]
-        if a.rounds_cleared != b.rounds_cleared:
+        if a.total_points != b.total_points:
+            self._finish("a" if a.total_points > b.total_points else "b", "more_points")
+        elif a.rounds_cleared != b.rounds_cleared:
             self._finish("a" if a.rounds_cleared > b.rounds_cleared else "b", "more_vaults")
         elif a.rounds_cleared == 0 or abs(a.total_time - b.total_time) <= self.cfg.tie_window_s:
             self.phase = "tie"
@@ -563,6 +606,8 @@ class Game:
                     "name": s.name,
                     "rounds_cleared": s.rounds_cleared,
                     "crack_times": list(s.crack_times),
+                    "points": list(s.points),
+                    "total_points": s.total_points,
                     "total_time": s.total_time,
                     "wrong_guesses": s.wrong_guesses,
                     "tiebreak_wrong": s.tiebreak_wrong,

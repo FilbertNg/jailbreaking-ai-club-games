@@ -18,13 +18,16 @@ const els = {
 };
 
 const HOW_ENDED = {
-  more_vaults: () => "Cracked more vaults.",
-  faster_total: () => "Same number of vaults, but cracked them faster in total.",
+  more_points: () => "Scored more points.",
+  more_vaults: () => "Same points, but cracked more vaults.",
+  faster_total: () => "Same points and vaults, but cracked them faster in total.",
   tiebreaker: () => "Won the tiebreaker.",
   host_award: () => "Awarded by the host.",
 };
 
-const REVEAL_HOW = { cracked: "cracked", skipped: "skipped by the host", unsolved: "not cracked" };
+const REVEAL_HOW = { cracked: "cracked", skipped: "skipped by the host", unsolved: "not cracked", rule_broken: "lost for a broken rule" };
+
+const pts = (n) => `${n} ${n === 1 ? "pt" : "pts"}`;
 
 function revealText(r, names) {
   const vault = r.vault === null ? "Tiebreaker" : `Vault ${r.vault}`;
@@ -40,6 +43,7 @@ let guessing = false;
 let hintsOpen = true;
 let confirmNew = false;
 let confirmEnd = false;
+let confirmRule = null;
 const nextNames = { a: "", b: "" };
 let hostPin = readPin();
 
@@ -119,12 +123,13 @@ function render(s) {
   const names = s.team_names;
   const where = s.phase === "lobby" ? "" : s.round_number ? ` · Round ${s.round_number} of ${s.rounds_total}` : " · Tiebreaker";
   els.session.textContent = `Session ${s.session}${where}${s.paused ? " · Paused" : ""}`;
-  els.teamName.textContent = isPlaying(s) ? `${names[team]} · ${s.difficulty}` : names[team];
+  const worth = s.round_points ? ` · First to crack ${pts(s.round_points.first)}, second ${pts(s.round_points.second)}` : "";
+  els.teamName.textContent = isPlaying(s) ? `${names[team]} · ${s.difficulty}${worth}` : names[team];
   document.title = `${names[team]} · VaultBot`;
   els.title.textContent = titleFor(s);
   els.timer.textContent = s.seconds_left == null ? "--:--" : fmt(s.seconds_left);
   els.timer.classList.toggle("low", s.seconds_left != null && s.seconds_left <= 30 && !s.paused);
-  els.score.textContent = `${names.a} ${s.rounds_cleared.a}/${s.rounds_total} · ${names.b} ${s.rounds_cleared.b}/${s.rounds_total}`;
+  els.score.textContent = `${names.a} ${pts(s.points.a)} · ${names.b} ${pts(s.points.b)}`;
   renderNotes(s, prev);
   renderNotice(s);
   renderChat(s);
@@ -215,7 +220,7 @@ function renderOverlay(s) {
   if (s.phase === "finished" && s.winner) {
     stamp = s.winner === team ? "YOU WIN" : "SESSION OVER";
     const how = HOW_ENDED[s.how_ended] ? HOW_ENDED[s.how_ended](s) : "";
-    text = `${s.team_names[s.winner]} wins session ${s.session}. ${how}`;
+    text = `${s.team_names[s.winner]} wins session ${s.session}. ${how} Final score: ${s.team_names.a} ${pts(s.points.a)}, ${s.team_names.b} ${pts(s.points.b)}.`;
   } else if (s.phase === "tie") {
     stamp = "TIE";
     text = "Tie. Waiting for the host to start the tiebreaker.";
@@ -371,7 +376,7 @@ els.guessForm.addEventListener("submit", async (e) => {
     const r = await api("/api/guess", { method: "POST", body: JSON.stringify({ team, code }) });
     if (r.result === "correct") {
       els.code.value = "";
-      note(els.guessNote, "Correct. The vault is open.");
+      note(els.guessNote, r.points ? `Correct. The vault is open. +${pts(r.points)}.` : "Correct. The vault is open.");
       showStamp("CRACKED");
     } else if (r.result === "wrong") {
       note(els.guessNote, `DENIED. That is not the code. Wait ${Math.ceil(r.cooldown_s)} seconds before the next try.`, true);
@@ -393,6 +398,7 @@ els.guessForm.addEventListener("submit", async (e) => {
 const DONE = {
   "start-round": () => `Round ${state.round_number} started.`,
   "end-round": () => "Round ended.",
+  "rule-broken": (b) => `${state.team_names[b.team]} lost the round.`,
   pause: () => "Paused. Both clocks and chats are frozen.",
   resume: () => "Resumed.",
   "add-time": (b) => `Added ${b.seconds / 60} min.`,
@@ -414,6 +420,7 @@ async function runHost(action, body = {}) {
     });
     confirmNew = false;
     confirmEnd = false;
+    confirmRule = null;
     if (action === "new-session") { nextNames.a = ""; nextNames.b = ""; }
     await poll();
     note(els.hostNote, DONE[action](body));
@@ -507,8 +514,25 @@ function clockSection(s) {
       parts.push(el("button", { type: "button", class: "quiet", onclick: () => { confirmEnd = true; renderHost(state, true); } },
         "End this round now"));
     }
+    parts.push(...ruleBrokenControls(s));
   }
   return section(s.phase === "tiebreaker" ? "Tiebreaker clock" : `Round ${s.round_number} clock`, ...parts);
+}
+
+function ruleBrokenControls(s) {
+  const n = s.team_names;
+  if (confirmRule) {
+    const other = confirmRule === "a" ? "b" : "a";
+    return [
+      el("p", { class: "note alert" }, `${n[confirmRule]} scores 0 this round. ${n[other]} gets at least ${pts(s.rule_broken_points)}. The round ends now.`),
+      row(
+        hostButton(`Yes, ${n[confirmRule]} broke a rule`, "rule-broken", { team: confirmRule }, "danger"),
+        el("button", { type: "button", class: "quiet", onclick: () => { confirmRule = null; renderHost(state, true); } }, "Cancel"),
+      ),
+    ];
+  }
+  const ask = (t) => el("button", { type: "button", class: "quiet", onclick: () => { confirmRule = t; renderHost(state, true); } }, `${n[t]} broke a rule`);
+  return [row(ask("a"), ask("b"))];
 }
 
 function clockText(s) {
@@ -563,7 +587,7 @@ function resultSection(s) {
   const n = s.team_names;
   const parts = [];
   if (s.phase === "tie") {
-    parts.push(el("p", {}, `Vaults: ${n.a} ${s.rounds_cleared.a}, ${n.b} ${s.rounds_cleared.b}. Total crack time: ${n.a} ${fmt(Math.round(s.total_time.a))}, ${n.b} ${fmt(Math.round(s.total_time.b))}.`));
+    parts.push(el("p", {}, `Points: ${n.a} ${s.points.a}, ${n.b} ${s.points.b}. Vaults: ${n.a} ${s.rounds_cleared.a}, ${n.b} ${s.rounds_cleared.b}. Total crack time: ${n.a} ${fmt(Math.round(s.total_time.a))}, ${n.b} ${fmt(Math.round(s.total_time.b))}.`));
     const form = el("form", { class: "host-form" }, ...minutesField("tb-minutes", "Tiebreaker time (minutes)", s.tiebreaker_minutes),
       el("button", { type: "submit" }, "Start the tiebreaker"));
     form.addEventListener("submit", (e) => {
@@ -615,7 +639,7 @@ function nextSessionSection(s) {
 
 function renderHost(s, force = false) {
   if (!s) return;
-  const key = [s.session, s.phase, s.paused, s.round_number, s.hint_given, hostPin ? 1 : 0, confirmNew, confirmEnd].join("|");
+  const key = [s.session, s.phase, s.paused, s.round_number, s.hint_given, hostPin ? 1 : 0, confirmNew, confirmEnd, confirmRule].join("|");
   if (!force && key === hostKey) {
     const clock = $("host-clock");
     if (clock) clock.textContent = clockText(s);
@@ -636,6 +660,7 @@ function renderHost(s, force = false) {
 els.hostBtn.addEventListener("click", () => {
   confirmNew = false;
   confirmEnd = false;
+  confirmRule = null;
   note(els.hostNote, "");
   renderHost(state, true);
   els.hostDialog.showModal();

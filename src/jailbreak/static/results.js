@@ -29,6 +29,7 @@ function howText(r) {
   const other = r.winner ? r.teams[r.winner === "a" ? "b" : "a"] : null;
   let text;
   switch (r.how_ended) {
+    case "more_points": text = "Scored more points."; break;
     case "more_vaults": text = "Cracked more vaults."; break;
     case "faster_total": text = `Same number of vaults, cracked in ${fmt(w.total_time)} total against ${fmt(other.total_time)}.`; break;
     case "tiebreaker": text = "Won the tiebreaker."; break;
@@ -40,10 +41,16 @@ function howText(r) {
   return text;
 }
 
+function sideScore(team, total) {
+  const vaults = `${team.rounds_cleared}/${total} vaults`;
+  const points = team.total_points ?? team.points;
+  return points === undefined ? vaults : `${points} pts, ${vaults}`;
+}
+
 function sides(teams, total, winner) {
   return el("div", "sides", ...["a", "b"].map((t) => el("p", `side${winner === t ? " won" : ""}`,
     el("span", "", teams[t].name),
-    el("span", "vaults", `${teams[t].rounds_cleared}/${total} vaults`))));
+    el("span", "vaults", sideScore(teams[t], total)))));
 }
 
 function codeLines(r) {
@@ -54,7 +61,7 @@ function codeLines(r) {
     if (!mine.length) return [];
     const items = mine.map((x) => {
       const label = x.vault === null ? `tiebreaker ${x.code}` : x.code;
-      const how = x.how === "skipped" ? " (skipped)" : x.how === "unsolved" ? " (not cracked)" : "";
+      const how = x.how === "skipped" ? " (skipped)" : x.how === "unsolved" ? " (not cracked)" : x.how === "rule_broken" ? " (rule broken)" : "";
       return label + how;
     });
     return [el("p", "codes", `${r.teams[t].name} codes: ${items.join(", ")}`)];
