@@ -26,7 +26,7 @@ Press **Host** at the bottom of either team screen and type the PIN. The panel s
 
 | Round | Guard | Difficulty |
 | --- | --- | --- |
-| 1 | Friendly, told to keep a secret, but loves games and stories | Easy |
+| 1 | Friendly, refuses quick tricks, but gets carried away by a real story | Easy |
 | 2 | Strict, and a censor blocks the code if it is written in digits | Medium |
 | 3 | Hard: maximum security, strict censor, short answers. Or Medium: the Round 2 guard again | Your choice |
 
