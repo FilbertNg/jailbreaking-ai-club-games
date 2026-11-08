@@ -2,6 +2,11 @@
 
 A two-team game: each team chats with VaultBot, a guard played by Gemini, and tries to make it say a secret 4-digit code. Three rounds, each guard stricter than the last. Rules for the host are in [GAME_GUIDE.md](GAME_GUIDE.md).
 
+---
+
+https://github.com/user-attachments/assets/62027429-8d2c-4a05-a94b-b8e5d62e2d42
+
+
 ## How it runs
 
 Laptop A runs the server and shows Team A's screen. Laptop B opens Team B's screen from Laptop A over the same Wi-Fi. Both laptops have the code from GitHub, so Laptop B can take over as the server if Laptop A fails.
